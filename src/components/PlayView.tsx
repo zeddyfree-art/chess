@@ -4,6 +4,7 @@ import { loadMaia, MAIA_DOWNLOAD_MB, MAIA_MAX, MAIA_MIN, isMaiaDownloaded, useMa
 import { chooseOpponentMove, type MoveSource, type OpponentSettings } from '../lib/opponent';
 import { findMove, movesAt, type Repertoire } from '../lib/repertoire';
 import { activeProfile, activeRep, profileRating, useApp } from '../lib/store';
+import { engine } from '../lib/engine';
 import { getToken } from '../lib/lichess';
 import { Board } from './Board';
 import { Icon } from './Icon';
@@ -63,6 +64,8 @@ function PlaySetup({ onStart }: { onStart: (g: GameConfig) => void }) {
   const go = async () => {
     setError(null);
     try {
+      // Stockfish is not needed while playing; free its memory for Maia (matters on phones and tablets).
+      engine.terminate();
       await loadMaia();
       onStart({
         start,
@@ -202,6 +205,7 @@ function GameSession({ config, onNew, onRematch }: { config: GameConfig; onNew: 
   const [result, setResult] = useState<string | null>(null);
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   const [notice, setNotice] = useState<{ text: React.ReactNode; takeback?: boolean } | null>(null);
   const [orientation, setOrientation] = useState<Side>(config.color);
   const alive = useRef(true);
@@ -251,7 +255,7 @@ function GameSession({ config, onNew, onRematch }: { config: GameConfig; onNew: 
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, myTurn, result]);
+  }, [key, myTurn, result, retry]);
 
   const onMove = (orig: string, dest: string) => {
     if (!myTurn || result || thinking) return;
@@ -328,7 +332,14 @@ function GameSession({ config, onNew, onRematch }: { config: GameConfig; onNew: 
               )}
             </div>
           )}
-          {error && <div className="notice error small">{error}</div>}
+          {error && (
+            <div className="notice error small row wrap">
+              <span style={{ flex: 1 }}>{error}</span>
+              <button className="btn sm" onClick={() => setRetry((r) => r + 1)}>
+                Try again
+              </button>
+            </div>
+          )}
           <MoveList moves={moves} sources={sources} />
           <div className="row wrap">
             <button className="btn" onClick={takeBack} disabled={thinking || moves.length <= config.start.length}>

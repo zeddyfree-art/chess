@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AuditView } from './components/AuditView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { BuildView } from './components/BuildView';
 import { HomeView, NewRepertoireDialog } from './components/HomeView';
 import { Icon, type IconName } from './components/Icon';
@@ -58,7 +59,11 @@ export function App() {
   return (
     <div className="app">
       <TopBar />
-      <main>{content}</main>
+      <main>
+        <ErrorBoundary key={view} onReset={() => useApp.getState().setView('home')}>
+          {content}
+        </ErrorBoundary>
+      </main>
       {toast && (
         <div className="toast" role="status">
           <span>{toast.message}</span>

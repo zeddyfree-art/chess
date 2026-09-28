@@ -121,6 +121,18 @@ class StockfishEngine {
     this.pending = null;
     if (this.searching) this.send('stop');
   }
+
+  /** Frees the worker's memory (its hash table and network); it restarts on the next analysis. */
+  terminate() {
+    this.pending?.resolve([]);
+    this.current?.resolve([]);
+    this.pending = null;
+    this.current = null;
+    this.searching = false;
+    this.worker?.terminate();
+    this.worker = null;
+    this.ready = null;
+  }
 }
 
 export const engine = new StockfishEngine();
