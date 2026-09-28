@@ -12,7 +12,7 @@ const APP_KEY = 'repertoireApp';
 const FOLDER_NAME = 'Repertoire app';
 
 /** OAuth client of the published site (public by design; see docs/google-drive-setup.md). */
-const DEFAULT_CLIENT_ID = '';
+const DEFAULT_CLIENT_ID = '611331060397-qed3b7dfpv7tfq9d40otn610dm4knumt.apps.googleusercontent.com';
 
 /** Client id pasted in Settings on this device, else the build-time one (VITE_GOOGLE_CLIENT_ID), else the default. */
 export function googleClientId(): string {
