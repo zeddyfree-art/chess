@@ -393,7 +393,11 @@ function GameSession({ config, onNew, onRematch }: { config: GameConfig; onNew: 
 
 function MoveList({ moves, sources }: { moves: PlayedMove[]; sources: Source[] }) {
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ block: 'nearest' }), [moves.length]);
+  useEffect(() => {
+    // Braces matter: newer browsers return a Promise from scrollIntoView, and an effect must
+    // return nothing or a cleanup function.
+    end.current?.scrollIntoView({ block: 'nearest' });
+  }, [moves.length]);
   if (!moves.length) return <div className="small faint">No moves yet.</div>;
   const tag = (s: Source) =>
     s === 'repertoire' ? <span className="badge mine">book</span> : s === 'database' ? <span className="badge accent">db</span> : s === 'maia' ? <span className="badge">maia</span> : null;

@@ -14,7 +14,9 @@ export function TrainView() {
   const trainFrom = useApp((s) => s.trainFrom);
   const [mode, setMode] = useState<Mode | null>(null);
   const [newLimit, setNewLimit] = useState(() => Number(localStorage.getItem('new-limit') ?? 10));
-  useEffect(() => localStorage.setItem('new-limit', String(newLimit)), [newLimit]);
+  useEffect(() => {
+    localStorage.setItem('new-limit', String(newLimit));
+  }, [newLimit]);
   // Freeze the queue when a session starts so grading doesn't reshuffle it.
   const [queue, setQueue] = useState<QItem[]>([]);
 

@@ -58,15 +58,21 @@ export function BuildView() {
 
   const key = ply === 0 ? ROOT : line[ply - 1].to;
   const [orientation, setOrientation] = useState<Side>(rep.side);
-  useEffect(() => setOrientation(rep.side), [rep.id, rep.side]);
+  useEffect(() => {
+    setOrientation(rep.side);
+  }, [rep.id, rep.side]);
   const [tab, setTab] = useState<Tab>(() => readPref('build-tab', 'lichess'));
   const [engineOn, setEngineOn] = useState<boolean>(() => readPref('engine-on', true));
   const [hover, setHover] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ title: string; body: React.ReactNode; choices: Choice[] } | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
 
-  useEffect(() => writePref('build-tab', tab), [tab]);
-  useEffect(() => writePref('engine-on', engineOn), [engineOn]);
+  useEffect(() => {
+    writePref('build-tab', tab);
+  }, [tab]);
+  useEffect(() => {
+    writePref('engine-on', engineOn);
+  }, [engineOn]);
 
   const explorerDb = tab === 'masters' ? 'masters' : 'lichess';
   const explorer = useExplorer(key, explorerDb, profile.ratings, profile.speeds, tab !== 'engine');
