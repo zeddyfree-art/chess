@@ -32,10 +32,10 @@ export function EnginePanel({ evaluation, enabled, onToggle, onPlay, onHover, st
         <span className="spacer" />
         {enabled && evaluation && (
           <span className="faint small">
-            {evaluation.source === 'cloud' ? 'Lichess cloud' : 'Stockfish 19 (lokaal)'} · diepte {evaluation.depth}
+            {evaluation.source === 'cloud' ? 'Lichess cloud' : 'Stockfish 19 (local)'} · depth {evaluation.depth}
           </span>
         )}
-        {enabled && !evaluation && <span className="faint small">rekenen…</span>}
+        {enabled && !evaluation && <span className="faint small">thinking…</span>}
       </div>
       {enabled && evaluation && (
         <div>
@@ -60,8 +60,8 @@ export function EnginePanel({ evaluation, enabled, onToggle, onPlay, onHover, st
       )}
       {!enabled && (
         <div className="help">
-          Eerst wordt de Lichess cloud-evaluatie gebruikt (diep en direct). Is die er niet, dan rekent Stockfish 19 lokaal
-          in je browser.
+          Uses the Lichess cloud evaluation first (deep and instant). If there is none, Stockfish 19 runs locally in your
+          browser.
         </div>
       )}
     </div>

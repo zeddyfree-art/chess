@@ -43,24 +43,24 @@ export function ExplorerPanel({ positionKey, result, db, profile, repSide, repMo
 
   const filterSummary =
     db === 'masters'
-      ? 'Meesterpartijen (2200+ OTB)'
-      : `${profile.ratings.length ? summarizeRatings(profile.ratings) : 'Alle ratings'} · ${
-          profile.speeds.length ? profile.speeds.map((s) => SPEED_LABELS[s as keyof typeof SPEED_LABELS]).join(', ') : 'alle tempo’s'
+      ? 'Master games (2200+ OTB)'
+      : `${profile.ratings.length ? summarizeRatings(profile.ratings) : 'All ratings'} · ${
+          profile.speeds.length ? profile.speeds.map((s) => SPEED_LABELS[s as keyof typeof SPEED_LABELS]).join(', ') : 'all time controls'
         }`;
 
   if (error instanceof AuthRequiredError) {
     return (
       <div className="notice stack">
         <div>
-          <b>Koppel je Lichess-account</b> om de database te gebruiken. Sinds 2026 vraagt Lichess daarvoor een (gratis)
-          login; je wachtwoord komt nooit in deze app.
+          <b>Connect your Lichess account</b> to use the database. Since 2026 Lichess requires a (free) login for it; your
+          password never reaches this app.
         </div>
         <div className="row">
           <button className="btn primary" onClick={() => startLogin()}>
-            Inloggen met Lichess
+            Log in with Lichess
           </button>
           <button className="btn ghost" onClick={() => setView('settings')}>
-            Of een token plakken…
+            Or paste a token…
           </button>
         </div>
       </div>
@@ -72,13 +72,13 @@ export function ExplorerPanel({ positionKey, result, db, profile, repSide, repMo
   return (
     <div className="stack" style={{ gap: 8 }}>
       <div className="row">
-        <button className="btn sm ghost" onClick={() => setShowFilters((v) => !v)} title="Filters aanpassen">
+        <button className="btn sm ghost" onClick={() => setShowFilters((v) => !v)} title="Change filters">
           <Icon name="settings" size={14} />
           <span className="muted">{filterSummary}</span>
         </button>
         <span className="spacer" />
-        {loading && <span className="faint small">laden…</span>}
-        {data && <span className="faint small num">{total.toLocaleString('nl-NL')} partijen</span>}
+        {loading && <span className="faint small">loading…</span>}
+        {data && <span className="faint small num">{total.toLocaleString('en-US')} games</span>}
       </div>
 
       {showFilters && db === 'lichess' && (
@@ -106,26 +106,26 @@ export function ExplorerPanel({ positionKey, result, db, profile, repSide, repMo
             ))}
           </div>
           <div className="help">
-            Rating = gemiddelde van beide spelers. Deze filters horen bij het profiel <b>{profile.name}</b> en worden ook
-            gebruikt bij de gatenanalyse.
+            Rating = average of both players. These filters belong to the profile <b>{profile.name}</b> and are also used
+            by the gap check.
           </div>
         </div>
       )}
 
       {error && <div className="notice error">{error.message}</div>}
 
-      {data && !data.moves.length && <div className="empty">Geen partijen in deze stelling met deze filters.</div>}
+      {data && !data.moves.length && <div className="empty">No games in this position with these filters.</div>}
 
       {data && data.moves.length > 0 && (
         <table className="explorer-table">
           <thead>
             <tr>
-              <th>Zet</th>
-              <th>Gespeeld</th>
+              <th>Move</th>
+              <th>Played</th>
               <th className="col-games" style={{ textAlign: 'right' }}>
-                Partijen
+                Games
               </th>
-              <th>Wit · remise · zwart</th>
+              <th>White · draw · black</th>
               <th />
             </tr>
           </thead>
@@ -157,15 +157,15 @@ export function ExplorerPanel({ positionKey, result, db, profile, repSide, repMo
                   </td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {inRep ? (
-                      <span className="badge mine" title="Zit in je repertoire">
+                      <span className="badge mine" title="In your repertoire">
                         <Icon name="check" size={12} />
                       </span>
                     ) : (
                       <>
-                        {isGap && <span className="badge gap">gat</span>}{' '}
+                        {isGap && <span className="badge gap">gap</span>}{' '}
                         <button
                           className="btn sm icon ghost"
-                          title="Toevoegen aan repertoire"
+                          title="Add to repertoire"
                           onClick={(e) => {
                             e.stopPropagation();
                             onAdd(m.san);
@@ -192,7 +192,7 @@ function Wdl({ m }: { m: ExplorerMove }) {
   const d = (m.draws / t) * 100;
   const b = (m.black / t) * 100;
   return (
-    <div className="wdl num" title={`Wit ${w.toFixed(0)}% · remise ${d.toFixed(0)}% · zwart ${b.toFixed(0)}%`}>
+    <div className="wdl num" title={`White ${w.toFixed(0)}% · draw ${d.toFixed(0)}% · black ${b.toFixed(0)}%`}>
       <div className="w" style={{ width: `${w}%` }}>
         {w >= 14 ? `${w.toFixed(0)}%` : ''}
       </div>

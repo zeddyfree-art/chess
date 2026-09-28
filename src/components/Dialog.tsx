@@ -28,7 +28,7 @@ export function ChoiceDialog({ title, body, choices, onClose }: { title: string;
       <div>{body}</div>
       <div className="row" style={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         <button className="btn ghost" onClick={onClose}>
-          Annuleren
+          Cancel
         </button>
         {choices.map((c) => (
           <button

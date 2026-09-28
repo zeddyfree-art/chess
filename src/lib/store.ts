@@ -1,6 +1,6 @@
-// Global app state (zustand). Data lives in IndexedDB in the browser; there is no
-// server and no move limit. Every repertoire change goes through `updateRep` so it
-// can be undone.
+// Global app state (zustand). Data lives in IndexedDB in the browser (and optionally
+// syncs to Google Drive, see sync.ts). Every repertoire change goes through
+// `updateRep` so it can be undone and so its `updatedAt` is bumped for syncing.
 import { create } from 'zustand';
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { playSan, type PlayedMove, type Side } from './chess';
@@ -11,20 +11,27 @@ export interface Profile {
   id: string;
   name: string;
   color: string;
+  /** Lichess rating groups of the opponents this player meets. */
   ratings: number[];
   speeds: string[];
+  /** The player's own approximate rating (used for the human-like opponent). */
+  rating?: number;
+  updatedAt?: number;
 }
 
 export interface AppData {
   version: 1;
   profiles: Profile[];
   repertoires: Repertoire[];
+  /** Device-local selection; never taken over from another device when syncing. */
   activeProfileId: string | null;
   activeRepId: string | null;
   lastBackupAt: number | null;
+  /** Deletion tombstones (profile or repertoire id → time), so deletions survive syncing. */
+  deleted?: Record<string, number>;
 }
 
-export type View = 'home' | 'build' | 'tree' | 'train' | 'audit' | 'settings';
+export type View = 'home' | 'build' | 'tree' | 'train' | 'play' | 'audit' | 'settings';
 
 export interface Toast {
   id: number;
@@ -45,6 +52,10 @@ export interface AppState {
   /** Explored line on the build board, and how far into it we are. */
   line: PlayedMove[];
   ply: number;
+  /** When set, training is limited to the branch starting at this position. */
+  trainScope: string | null;
+  /** Moves leading to the position a practice game starts from. */
+  playStart: PlayedMove[];
   undo: UndoEntry[];
   redo: UndoEntry[];
   toast: Toast | null;
@@ -63,24 +74,30 @@ export interface AppState {
   undoLast(): void;
   redoLast(): void;
   replaceData(data: AppData): void;
+  /** Takes over data merged from another device without touching navigation state. */
+  applyRemote(data: AppData): void;
   markBackup(): void;
 
   playMove(move: PlayedMove): void;
   setPly(ply: number): void;
   resetLine(): void;
+  openLine(line: PlayedMove[]): void;
   goToKey(key: string): void;
   goToSans(sans: string[]): void;
+  trainFrom(key: string | null): void;
+  playFrom(line: PlayedMove[]): void;
   showToast(message: string, action?: Toast['action']): void;
   hideToast(): void;
 }
 
-const EMPTY: AppData = {
+export const EMPTY_DATA: AppData = {
   version: 1,
   profiles: [],
   repertoires: [],
   activeProfileId: null,
   activeRepId: null,
   lastBackupAt: null,
+  deleted: {},
 };
 
 export const PROFILE_COLORS = ['#2f7dd1', '#d1542f', '#2fa56b', '#a24fd1', '#d1a02f', '#d12f7d'];
@@ -89,17 +106,36 @@ const dataStore = typeof indexedDB !== 'undefined' ? createStore('repertoire-dat
 
 let toastSeq = 0;
 
+/** Keeps the active profile/repertoire pointing at something that exists. */
+function fixSelection(data: AppData): AppData {
+  const activeProfileId = data.profiles.some((p) => p.id === data.activeProfileId)
+    ? data.activeProfileId
+    : (data.profiles[0]?.id ?? null);
+  const activeRepId = data.repertoires.some((r) => r.id === data.activeRepId && r.profileId === activeProfileId)
+    ? data.activeRepId
+    : (data.repertoires.find((r) => r.profileId === activeProfileId)?.id ?? null);
+  return activeProfileId === data.activeProfileId && activeRepId === data.activeRepId
+    ? data
+    : { ...data, activeProfileId, activeRepId };
+}
+
 export const useApp = create<AppState>()((set, get) => {
   const patchData = (patch: Partial<AppData>) => set((s) => ({ data: { ...s.data, ...patch } }));
   const mapRep = (id: string, fn: (r: Repertoire) => Repertoire) =>
     set((s) => ({ data: { ...s.data, repertoires: s.data.repertoires.map((r) => (r.id === id ? fn(r) : r)) } }));
+  const tombstone = (ids: string[]) => {
+    const now = Date.now();
+    return { ...(get().data.deleted ?? {}), ...Object.fromEntries(ids.map((id) => [id, now])) };
+  };
 
   return {
     loaded: false,
-    data: EMPTY,
+    data: EMPTY_DATA,
     view: 'home',
     line: [],
     ply: 0,
+    trainScope: null,
+    playStart: [],
     undo: [],
     redo: [],
     toast: null,
@@ -109,33 +145,35 @@ export const useApp = create<AppState>()((set, get) => {
     setActiveProfile: (id) => {
       const reps = get().data.repertoires.filter((r) => r.profileId === id);
       patchData({ activeProfileId: id, activeRepId: reps[0]?.id ?? null });
-      set({ line: [], ply: 0, view: 'home' });
+      set({ line: [], ply: 0, view: 'home', trainScope: null });
     },
 
     setActiveRep: (id) => {
       patchData({ activeRepId: id });
-      set({ line: [], ply: 0 });
+      set({ line: [], ply: 0, trainScope: null });
     },
 
     addProfile: (p) => {
-      const profile = { ...p, id: crypto.randomUUID() };
+      const profile = { ...p, id: crypto.randomUUID(), updatedAt: Date.now() };
       const { data } = get();
       patchData({ profiles: [...data.profiles, profile], activeProfileId: data.activeProfileId ?? profile.id });
       return profile;
     },
 
     updateProfile: (id, patch) =>
-      patchData({ profiles: get().data.profiles.map((p) => (p.id === id ? { ...p, ...patch } : p)) }),
+      patchData({ profiles: get().data.profiles.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: Date.now() } : p)) }),
 
     deleteProfile: (id) => {
       const { data } = get();
-      const profiles = data.profiles.filter((p) => p.id !== id);
-      const repertoires = data.repertoires.filter((r) => r.profileId !== id);
-      const activeProfileId = data.activeProfileId === id ? (profiles[0]?.id ?? null) : data.activeProfileId;
-      const activeRepId = repertoires.some((r) => r.id === data.activeRepId)
-        ? data.activeRepId
-        : (repertoires.find((r) => r.profileId === activeProfileId)?.id ?? null);
-      patchData({ profiles, repertoires, activeProfileId, activeRepId });
+      const gone = data.repertoires.filter((r) => r.profileId === id).map((r) => r.id);
+      set({
+        data: fixSelection({
+          ...data,
+          profiles: data.profiles.filter((p) => p.id !== id),
+          repertoires: data.repertoires.filter((r) => r.profileId !== id),
+          deleted: tombstone([id, ...gone]),
+        }),
+      });
     },
 
     createRepertoire: (name, side) => {
@@ -147,26 +185,24 @@ export const useApp = create<AppState>()((set, get) => {
 
     addRepertoire: (rep) => {
       patchData({ repertoires: [...get().data.repertoires, syncCards(rep)], activeRepId: rep.id });
-      set({ line: [], ply: 0 });
+      set({ line: [], ply: 0, trainScope: null });
     },
 
     deleteRepertoire: (id) => {
       const { data } = get();
-      const repertoires = data.repertoires.filter((r) => r.id !== id);
-      patchData({
-        repertoires,
-        activeRepId:
-          data.activeRepId === id ? (repertoires.find((r) => r.profileId === data.activeProfileId)?.id ?? null) : data.activeRepId,
+      set({
+        data: fixSelection({ ...data, repertoires: data.repertoires.filter((r) => r.id !== id), deleted: tombstone([id]) }),
       });
     },
 
-    renameRepertoire: (id, name) => mapRep(id, (r) => ({ ...r, name })),
+    renameRepertoire: (id, name) => mapRep(id, (r) => ({ ...r, name, updatedAt: Date.now() })),
 
     updateRep: (repId, fn, label, opts) => {
       const before = get().data.repertoires.find((r) => r.id === repId);
       if (!before) return;
-      const after = syncCards(fn(before));
-      if (after === before) return;
+      const changed = syncCards(fn(before));
+      if (changed === before) return;
+      const after = { ...changed, updatedAt: Date.now() };
       mapRep(repId, () => after);
       if (opts?.undoable !== false) set((s) => ({ undo: [...s.undo.slice(-49), { repId, before, label }], redo: [] }));
     },
@@ -176,9 +212,9 @@ export const useApp = create<AppState>()((set, get) => {
       if (!entry) return;
       const current = get().data.repertoires.find((r) => r.id === entry.repId);
       if (!current) return;
-      mapRep(entry.repId, () => entry.before);
+      mapRep(entry.repId, () => ({ ...entry.before, updatedAt: Date.now() }));
       set((s) => ({ undo: s.undo.slice(0, -1), redo: [...s.redo, { ...entry, before: current }] }));
-      get().showToast(`Ongedaan: ${entry.label}`);
+      get().showToast(`Undone: ${entry.label}`);
     },
 
     redoLast: () => {
@@ -186,12 +222,36 @@ export const useApp = create<AppState>()((set, get) => {
       if (!entry) return;
       const current = get().data.repertoires.find((r) => r.id === entry.repId);
       if (!current) return;
-      mapRep(entry.repId, () => entry.before);
+      mapRep(entry.repId, () => ({ ...entry.before, updatedAt: Date.now() }));
       set((s) => ({ redo: s.redo.slice(0, -1), undo: [...s.undo, { ...entry, before: current }] }));
-      get().showToast(`Opnieuw: ${entry.label}`);
+      get().showToast(`Redone: ${entry.label}`);
     },
 
-    replaceData: (data) => set({ data: { ...EMPTY, ...data }, undo: [], redo: [], line: [], ply: 0, view: 'home' }),
+    replaceData: (incoming) => {
+      // A restore is a deliberate "this is the truth": everything restored counts as
+      // edited now, and whatever it does not contain counts as deleted.
+      const now = Date.now();
+      const current = get().data;
+      const keep = new Set([...incoming.profiles.map((p) => p.id), ...incoming.repertoires.map((r) => r.id)]);
+      const removed = [...current.profiles.map((p) => p.id), ...current.repertoires.map((r) => r.id)].filter((id) => !keep.has(id));
+      const deleted = { ...(incoming.deleted ?? {}), ...Object.fromEntries(removed.map((id) => [id, now])) };
+      for (const id of keep) delete deleted[id];
+      const data: AppData = fixSelection({
+        ...EMPTY_DATA,
+        ...incoming,
+        profiles: incoming.profiles.map((p) => ({ ...p, updatedAt: now })),
+        repertoires: incoming.repertoires.map((r) => ({ ...r, updatedAt: now })),
+        deleted,
+      });
+      set({ data, undo: [], redo: [], line: [], ply: 0, view: 'home', trainScope: null });
+    },
+
+    applyRemote: (incoming) => {
+      const { data } = get();
+      const next = fixSelection({ ...incoming, activeProfileId: data.activeProfileId, activeRepId: data.activeRepId });
+      const repGone = next.activeRepId !== data.activeRepId;
+      set({ data: next, ...(repGone ? { line: [], ply: 0, trainScope: null } : {}) });
+    },
 
     markBackup: () => patchData({ lastBackupAt: Date.now() }),
 
@@ -204,6 +264,8 @@ export const useApp = create<AppState>()((set, get) => {
     setPly: (ply) => set((s) => ({ ply: Math.max(0, Math.min(s.line.length, ply)) })),
 
     resetLine: () => set({ line: [], ply: 0 }),
+
+    openLine: (line) => set({ line, ply: line.length, view: 'build' }),
 
     goToKey: (key) => {
       const rep = activeRep(get());
@@ -224,6 +286,10 @@ export const useApp = create<AppState>()((set, get) => {
       }
       set({ line, ply: line.length, view: 'build' });
     },
+
+    trainFrom: (key) => set({ trainScope: key && key !== ROOT ? key : null, view: 'train' }),
+
+    playFrom: (line) => set({ playStart: line, view: 'play' }),
 
     showToast: (message, action) => {
       const id = ++toastSeq;
@@ -255,13 +321,23 @@ export function unsavedCount(s: Pick<AppState, 'line' | 'ply'>, rep: Repertoire 
   return s.line.slice(0, s.ply).filter((m) => !findMove(rep, m.from, m.uci)).length;
 }
 
+/** The player's own rating: explicit, or the middle of the rating groups they face. */
+export function profileRating(p: Profile): number {
+  if (p.rating) return p.rating;
+  if (!p.ratings.length) return 1500;
+  const sorted = [...p.ratings].sort((a, b) => a - b);
+  const lo = sorted[0] || 800;
+  const hi = (sorted.at(-1) ?? 1500) + 199;
+  return Math.round((lo + hi) / 2 / 100) * 100;
+}
+
 // ---------------------------------------------------------------------------
 // Persistence
 
 export async function loadData() {
   let data: AppData | undefined;
   if (dataStore) data = (await idbGet('data', dataStore).catch(() => undefined)) as AppData | undefined;
-  useApp.setState({ data: { ...EMPTY, ...(data ?? {}) }, loaded: true });
+  useApp.setState({ data: { ...EMPTY_DATA, ...(data ?? {}) }, loaded: true });
   // Ask the browser not to evict our storage under pressure.
   navigator.storage?.persist?.().catch(() => {});
 
@@ -272,7 +348,7 @@ export async function loadData() {
     last = s.data;
     clearTimeout(timer);
     timer = setTimeout(() => {
-      if (dataStore) idbSet('data', last, dataStore).catch((e) => console.error('Opslaan mislukt', e));
+      if (dataStore) idbSet('data', last, dataStore).catch((e) => console.error('Saving failed', e));
     }, 300);
   });
   addEventListener('beforeunload', () => {
@@ -287,7 +363,7 @@ export function exportBackup(data: AppData): string {
 export function parseBackup(text: string): AppData {
   const json = JSON.parse(text);
   if (json?.version !== 1 || !Array.isArray(json.profiles) || !Array.isArray(json.repertoires)) {
-    throw new Error('Dit is geen geldig back-upbestand van deze app.');
+    throw new Error('This is not a valid backup file for this app.');
   }
   return json as AppData;
 }

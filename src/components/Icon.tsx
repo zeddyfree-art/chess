@@ -27,6 +27,12 @@ const PATHS = {
   collapse: 'M4 12h16',
   target: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 16a4 4 0 100-8 4 4 0 000 8z',
   lichess: 'M12 2l3 5-2 2 5 4-1 9H7l2-6-4-3 3-7z',
+  play: 'M7 4l13 8-13 8z',
+  cloud: 'M17.5 19H7a5 5 0 01-.9-9.9A6 6 0 0117.7 8a4.5 4.5 0 01-.2 11z',
+  refresh: 'M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5',
+  flag: 'M4 22V4M4 4h13l-2 4 2 4H4',
+  copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
+  external: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
 } as const;
 
 export type IconName = keyof typeof PATHS;

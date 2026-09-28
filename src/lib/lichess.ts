@@ -14,8 +14,8 @@ export const SPEED_LABELS: Record<Speed, string> = {
   bullet: 'Bullet',
   blitz: 'Blitz',
   rapid: 'Rapid',
-  classical: 'Klassiek',
-  correspondence: 'Correspondentie',
+  classical: 'Classical',
+  correspondence: 'Correspondence',
 };
 
 export function ratingLabel(bucket: number): string {
@@ -61,7 +61,7 @@ export function setToken(token: string | null, user?: string | null) {
 /** Checks a token against /api/account and returns the username. */
 export async function verifyToken(token: string): Promise<string> {
   const res = await fetch(`${LICHESS}/api/account`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error(res.status === 401 ? 'Token ongeldig of ingetrokken' : `Lichess antwoordde ${res.status}`);
+  if (!res.ok) throw new Error(res.status === 401 ? 'Token invalid or revoked' : `Lichess responded ${res.status}`);
   const json = await res.json();
   return json.username as string;
 }
@@ -102,10 +102,10 @@ export async function completeLoginIfRedirected(): Promise<string | null> {
   const error = url.searchParams.get('error');
   if (!code && !error) return null;
   history.replaceState(null, '', redirectUri() + url.hash);
-  if (error) throw new Error(`Inloggen geannuleerd (${error})`);
+  if (error) throw new Error(`Login cancelled (${error})`);
   const saved = JSON.parse(sessionStorage.getItem(PKCE_KEY) ?? 'null');
   sessionStorage.removeItem(PKCE_KEY);
-  if (!saved || saved.state !== state) throw new Error('Inloggen mislukt (state komt niet overeen)');
+  if (!saved || saved.state !== state) throw new Error('Login failed (state mismatch)');
   const res = await fetch(`${LICHESS}/api/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -117,7 +117,7 @@ export async function completeLoginIfRedirected(): Promise<string | null> {
       client_id: CLIENT_ID,
     }),
   });
-  if (!res.ok) throw new Error(`Token ophalen mislukt (${res.status})`);
+  if (!res.ok) throw new Error(`Could not obtain token (${res.status})`);
   const { access_token } = await res.json();
   const user = await verifyToken(access_token);
   setToken(access_token, user);
@@ -152,13 +152,13 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
 
 export class AuthRequiredError extends Error {
   constructor() {
-    super('De Lichess Opening Explorer vereist dat je inlogt met je Lichess-account (gratis).');
+    super('The Lichess Opening Explorer requires you to log in with a (free) Lichess account.');
   }
 }
 
 export class RateLimitError extends Error {
   constructor() {
-    super('Lichess vraagt om even te wachten (te veel verzoeken). Probeer het over een minuut opnieuw.');
+    super('Lichess asks us to slow down (too many requests). Try again in a minute.');
   }
 }
 
@@ -257,14 +257,14 @@ export function fetchExplorer(q: ExplorerQuery): Promise<ExplorerResult> {
         if (q.speeds.length) params.set('speeds', q.speeds.join(','));
       }
       const res = await fetch(`${EXPLORER}/${q.db}?${params}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {
-        throw new Error('Kon de Lichess-database niet bereiken. Controleer je internetverbinding.');
+        throw new Error('Could not reach the Lichess database. Check your internet connection.');
       });
       if (res.status === 401 || res.status === 403) throw new AuthRequiredError();
       if (res.status === 429) {
         pausedUntil = Date.now() + 60_000;
         throw new RateLimitError();
       }
-      if (!res.ok) throw new Error(`Opening Explorer: fout ${res.status}`);
+      if (!res.ok) throw new Error(`Opening Explorer: error ${res.status}`);
       const json = await res.json();
       return {
         white: json.white,
@@ -308,14 +308,14 @@ export function fetchCloudEval(fen: string, multiPv = 3): Promise<CloudEval | nu
     enqueue(async () => {
       const params = new URLSearchParams({ fen, multiPv: String(multiPv) });
       const res = await fetch(`${LICHESS}/api/cloud-eval?${params}`).catch(() => {
-        throw new Error('Kon Lichess niet bereiken.');
+        throw new Error('Could not reach Lichess.');
       });
       if (res.status === 404) return null;
       if (res.status === 429) {
         pausedUntil = Date.now() + 60_000;
         throw new RateLimitError();
       }
-      if (!res.ok) throw new Error(`Cloud eval: fout ${res.status}`);
+      if (!res.ok) throw new Error(`Cloud eval: error ${res.status}`);
       const json = await res.json();
       return { depth: json.depth, knodes: json.knodes, pvs: json.pvs } as CloudEval;
     }),

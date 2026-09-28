@@ -54,7 +54,7 @@ export function BuildView() {
   const profile = useApp(activeProfile)!;
   const line = useApp((s) => s.line);
   const ply = useApp((s) => s.ply);
-  const { playMove, setPly, updateRep, showToast, undoLast } = useApp.getState();
+  const { playMove, setPly, updateRep, showToast, undoLast, trainFrom, playFrom } = useApp.getState();
 
   const key = ply === 0 ? ROOT : line[ply - 1].to;
   const [orientation, setOrientation] = useState<Side>(rep.side);
@@ -82,6 +82,7 @@ export function BuildView() {
   const current = line.slice(0, ply);
   const firstUnsaved = current.findIndex((m) => !findMove(rep, m.from, m.uci));
   const unsaved = firstUnsaved < 0 ? 0 : current.length - firstUnsaved;
+  const inRepertoire = unsaved === 0 && (key === ROOT || movesAt(rep, key).length > 0 || current.length > 0);
 
   const lastMove = useMemo(() => (ply ? uciToArrow(line[ply - 1].uci) : null), [line, ply]);
 
@@ -125,11 +126,11 @@ export function BuildView() {
         added = countEdges(next.positions) - before;
         return next;
       },
-      'zetten opslaan',
+      'save moves',
     );
     showToast(
-      replace ? 'Zet vervangen' : `${added} ${added === 1 ? 'zet' : 'zetten'} opgeslagen`,
-      { label: 'Ongedaan maken', run: undoLast },
+      replace ? 'Move replaced' : `${added} ${added === 1 ? 'move' : 'moves'} saved`,
+      { label: 'Undo', run: undoLast },
     );
   };
 
@@ -139,17 +140,17 @@ export function BuildView() {
     const existing = movesAt(rep, conflict.from);
     const names = existing.map((m) => m.san).join(' / ');
     setDialog({
-      title: 'Je hebt hier al een zet',
+      title: 'You already have a move here',
       body: (
         <>
-          In deze stelling speel je nu <b>{names}</b>. Wil je <b>{conflict.san}</b> in plaats daarvan spelen, of beide
-          houden? Met één vaste zet per stelling is je repertoire makkelijker te trainen.
+          In this position you currently play <b>{names}</b>. Do you want to play <b>{conflict.san}</b> instead, or keep
+          both? One fixed move per position makes a repertoire easier to train.
         </>
       ),
       choices: [
-        { label: 'Beide houden', run: () => doSave(steps) },
+        { label: 'Keep both', run: () => doSave(steps) },
         {
-          label: `Vervang ${names} door ${conflict.san}`,
+          label: `Replace ${names} with ${conflict.san}`,
           kind: 'danger',
           run: () => doSave(steps, { from: conflict.from, ucis: existing.map((m) => m.uci) }),
         },
@@ -172,26 +173,26 @@ export function BuildView() {
   const askDelete = (m: RepMove) => {
     const impact = deletionImpact(rep, key, m.uci);
     setDialog({
-      title: `${m.san} verwijderen?`,
+      title: `Delete ${m.san}?`,
       body: (
         <>
-          Hiermee verdwijnen <b>{impact.moves}</b> {impact.moves === 1 ? 'zet' : 'zetten'} (de zet en alles erna)
+          This removes <b>{impact.moves}</b> {impact.moves === 1 ? 'move' : 'moves'} (the move and everything after it)
           {impact.cards > 0 && (
             <>
               {' '}
-              en <b>{impact.cards}</b> trainingskaart{impact.cards === 1 ? '' : 'en'}
+              and <b>{impact.cards}</b> training card{impact.cards === 1 ? '' : 's'}
             </>
           )}
-          . Stellingen die je via een andere zetvolgorde bereikt blijven bewaard. Je kunt dit ongedaan maken.
+          . Positions you also reach through another move order are kept. You can undo this.
         </>
       ),
       choices: [
         {
-          label: 'Verwijderen',
+          label: 'Delete',
           kind: 'danger',
           run: () => {
-            updateRep(rep.id, (r) => deleteMove(r, key, m.uci), `${m.san} verwijderd`);
-            showToast(`${m.san} en ${impact.moves - 1} vervolgzetten verwijderd`, { label: 'Ongedaan maken', run: undoLast });
+            updateRep(rep.id, (r) => deleteMove(r, key, m.uci), `${m.san} deleted`);
+            showToast(`Deleted ${m.san} and ${impact.moves - 1} follow-up moves`, { label: 'Undo', run: undoLast });
           },
         },
       ],
@@ -221,30 +222,30 @@ export function BuildView() {
           <Board position={key} orientation={orientation} movable="both" lastMove={lastMove} shapes={shapes} onMove={onBoardMove} />
         </div>
         <div className="board-controls">
-          <button className="btn icon" onClick={() => setPly(0)} title="Begin (Home)">
+          <button className="btn icon" onClick={() => setPly(0)} title="Start (Home)">
             <Icon name="first" />
           </button>
-          <button className="btn icon" onClick={() => setPly(ply - 1)} title="Terug (←)">
+          <button className="btn icon" onClick={() => setPly(ply - 1)} title="Back (←)">
             <Icon name="prev" />
           </button>
-          <button className="btn icon" onClick={() => setPly(ply + 1)} title="Vooruit (→)">
+          <button className="btn icon" onClick={() => setPly(ply + 1)} title="Forward (→)">
             <Icon name="next" />
           </button>
-          <button className="btn icon" onClick={() => setPly(line.length)} title="Einde (End)">
+          <button className="btn icon" onClick={() => setPly(line.length)} title="End (End)">
             <Icon name="last" />
           </button>
           <span className="spacer" />
           <span className="legend">
             <span>
               <i style={{ background: 'var(--mine)' }} />
-              jouw zet
+              your move
             </span>
             <span>
               <i style={{ background: 'var(--opp)' }} />
-              voorbereid antwoord
+              prepared reply
             </span>
           </span>
-          <button className="btn icon" onClick={() => setOrientation((o) => (o === 'white' ? 'black' : 'white'))} title="Bord draaien (f)">
+          <button className="btn icon" onClick={() => setOrientation((o) => (o === 'white' ? 'black' : 'white'))} title="Flip board (f)">
             <Icon name="flip" />
           </button>
         </div>
@@ -253,9 +254,22 @@ export function BuildView() {
       <div className="side-panel">
         <div className="card">
           <div className="section pos-head">
-            <span className="opening-name">{opening ?? (ply === 0 ? 'Beginstelling' : ' ')}</span>
+            <span className="opening-name">{opening ?? (ply === 0 ? 'Starting position' : ' ')}</span>
             <span className="spacer" />
-            <span className={`badge ${mine ? 'mine' : 'opp'}`}>{mine ? 'Jij aan zet' : 'Tegenstander aan zet'}</span>
+            <span className={`badge ${mine ? 'mine' : 'opp'}`}>{mine ? 'Your move' : 'Opponent to move'}</span>
+            <div className="row" style={{ flexBasis: '100%', gap: 6 }}>
+              <button
+                className="btn sm"
+                disabled={!inRepertoire}
+                title={inRepertoire ? 'Train the branch that starts here' : 'Save this line first'}
+                onClick={() => trainFrom(key)}
+              >
+                <Icon name="train" size={14} /> Train from here
+              </button>
+              <button className="btn sm" title="Play a practice game from this position" onClick={() => playFrom(current)}>
+                <Icon name="play" size={14} /> Play from here
+              </button>
+            </div>
           </div>
           <LineBar line={line} ply={ply} rep={rep} onJump={setPly} />
           {unsaved > 0 && (
@@ -263,21 +277,21 @@ export function BuildView() {
               <div className="save-banner">
                 <div style={{ flex: 1 }}>
                   <b>
-                    {unsaved} nieuwe {unsaved === 1 ? 'zet' : 'zetten'}
+                    {unsaved} new {unsaved === 1 ? 'move' : 'moves'}
                   </b>
-                  <div className="small muted">Nog niet in je repertoire</div>
+                  <div className="small muted">Not in your repertoire yet</div>
                 </div>
                 <button className="btn ghost" onClick={discard} title="Esc">
-                  Verwerpen
+                  Discard
                 </button>
                 <button className="btn primary" onClick={() => save(current)} title="Enter">
-                  <Icon name="check" size={16} /> Opslaan
+                  <Icon name="check" size={16} /> Save
                 </button>
               </div>
             </div>
           )}
           <div className="section stack" style={{ gap: 8 }}>
-            <h3>{mine ? 'Jouw zet in deze stelling' : 'Voorbereide antwoorden op de tegenstander'}</h3>
+            <h3>{mine ? 'Your move in this position' : 'Prepared replies to the opponent'}</h3>
             <RepMoves rep={rep} positionKey={key} moves={repMoves} mine={mine} onPlay={playHere} onDelete={askDelete} />
           </div>
           <NoteEditor rep={rep} positionKey={key} />
@@ -287,10 +301,10 @@ export function BuildView() {
           <div className="section">
             <div className="tabs">
               <button className={tab === 'lichess' ? 'on' : ''} onClick={() => setTab('lichess')}>
-                Lichess-partijen
+                Lichess games
               </button>
               <button className={tab === 'masters' ? 'on' : ''} onClick={() => setTab('masters')}>
-                Meesters
+                Masters
               </button>
               <button className={tab === 'engine' ? 'on' : ''} onClick={() => setTab('engine')}>
                 Engine
@@ -324,9 +338,9 @@ export function BuildView() {
           </div>
         </div>
         <div className="help">
-          <span className="kbd">←</span> <span className="kbd">→</span> door de lijn · <span className="kbd">Enter</span> opslaan ·{' '}
-          <span className="kbd">Esc</span> verwerpen · <span className="kbd">f</span> bord draaien · <span className="kbd">Ctrl</span>+
-          <span className="kbd">Z</span> ongedaan maken
+          <span className="kbd">←</span> <span className="kbd">→</span> move through the line · <span className="kbd">Enter</span> save ·{' '}
+          <span className="kbd">Esc</span> discard · <span className="kbd">f</span> flip board · <span className="kbd">Ctrl</span>+
+          <span className="kbd">Z</span> undo
         </div>
       </div>
 
@@ -338,7 +352,7 @@ export function BuildView() {
 function LineBar({ line, ply, rep, onJump }: { line: PlayedMove[]; ply: number; rep: Repertoire; onJump: (ply: number) => void }) {
   if (!line.length) {
     return (
-      <div className="line-bar section faint">Speel een zet op het bord, of klik een zet in de database hieronder.</div>
+      <div className="line-bar section faint">Play a move on the board, or click a move in the database below.</div>
     );
   }
   return (
@@ -393,10 +407,10 @@ function RepMoves({
     return (
       <div className="empty">
         {positionKey === ROOT && !mine
-          ? 'Nog leeg. Speel de openingszetten van de tegenstander waartegen je iets wilt voorbereiden.'
+          ? 'Empty so far. Play the opponent’s first moves you want to prepare against.'
           : mine
-            ? 'Nog geen zet gekozen. Speel je zet op het bord of kies er een uit de database.'
-            : 'Hier eindigt je voorbereiding. Voeg de meest gespeelde antwoorden toe (zie “gat” in de database).'}
+            ? 'No move chosen yet. Play your move on the board or pick one from the database.'
+            : 'Your preparation ends here. Add the most common replies (look for “gap” in the database).'}
       </div>
     );
   }
@@ -406,8 +420,8 @@ function RepMoves({
     <div className="rep-moves">
       {mine && moves.length > 1 && (
         <div className="notice small">
-          Je hebt hier {moves.length} zetten. Bij het trainen is elk ervan goed; maak er met ★ één hoofdzet van en verwijder de
-          rest als je wilt snoeien.
+          You have {moves.length} moves here. In training each of them counts as correct; use ★ to make one the main move and
+          delete the others if you want to prune.
         </div>
       )}
       {moves.map((m, i) => {
@@ -417,32 +431,32 @@ function RepMoves({
         const label = flag ? lossLabel(flag.loss) : null;
         return (
           <div key={m.uci} className={`rep-move ${mine ? 'mine' : 'opp'}`}>
-            <span className="san" onClick={() => onPlay(m.san)} title="Speel deze zet">
+            <span className="san" onClick={() => onPlay(m.san)} title="Play this move">
               {m.san}
               {label?.symbol && (
-                <span style={{ color: 'var(--gap)' }} title={`Engine: ${(flag!.loss / 100).toFixed(1)} pion slechter dan ${flag!.bestSan}`}>
+                <span style={{ color: 'var(--gap)' }} title={`Engine: ${(flag!.loss / 100).toFixed(1)} pawns worse than ${flag!.bestSan}`}>
                   {label.symbol}
                 </span>
               )}
             </span>
-            <span className="badge">{sizes[i] === 1 ? 'eindpunt' : `${sizes[i]} zetten`}</span>
-            {card && card.state !== State.New && card.due <= now && <span className="badge due">te herhalen</span>}
-            {card && card.state === State.New && <span className="badge accent">nieuw</span>}
-            {flag && label?.tone !== 'ok' && <span className="badge gap">beter: {flag.bestSan}</span>}
+            <span className="badge">{sizes[i] === 1 ? 'line end' : `${sizes[i]} moves`}</span>
+            {card && card.state !== State.New && card.due <= now && <span className="badge due">due</span>}
+            {card && card.state === State.New && <span className="badge accent">new</span>}
+            {flag && label?.tone !== 'ok' && <span className="badge gap">better: {flag.bestSan}</span>}
             <span className="spacer" />
             {i > 0 && (
               <button
                 className="btn sm icon ghost"
-                title="Maak hoofdzet (bovenaan)"
-                onClick={() => updateRep(rep.id, (r) => promoteMove(r, positionKey, m.uci), 'volgorde')}
+                title="Make main move (move to top)"
+                onClick={() => updateRep(rep.id, (r) => promoteMove(r, positionKey, m.uci), 'reorder')}
               >
                 <Icon name="star" size={15} />
               </button>
             )}
-            <button className="btn sm icon ghost" title="Commentaar" onClick={() => setEditing(editing === m.uci ? null : m.uci)}>
+            <button className="btn sm icon ghost" title="Comment" onClick={() => setEditing(editing === m.uci ? null : m.uci)}>
               <Icon name="comment" size={15} />
             </button>
-            <button className="btn sm icon ghost danger" title="Verwijder deze zet en alles erna" onClick={() => onDelete(m)}>
+            <button className="btn sm icon ghost danger" title="Delete this move and everything after it" onClick={() => onDelete(m)}>
               <Icon name="trash" size={15} />
             </button>
             {(editing === m.uci || m.comment) && (
@@ -453,9 +467,9 @@ function RepMoves({
                     className="input"
                     style={{ width: '100%' }}
                     defaultValue={m.comment ?? ''}
-                    placeholder="Idee achter de zet, plan, valkuil…"
+                    placeholder="Idea behind the move, plan, trap…"
                     onBlur={(e) => {
-                      updateRep(rep.id, (r) => setMoveComment(r, positionKey, m.uci, e.target.value.trim()), 'commentaar');
+                      updateRep(rep.id, (r) => setMoveComment(r, positionKey, m.uci, e.target.value.trim()), 'comment');
                       setEditing(null);
                     }}
                     onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
@@ -486,21 +500,21 @@ function NoteEditor({ rep, positionKey }: { rep: Repertoire; positionKey: string
     return (
       <div className="section">
         <button className="btn sm ghost" onClick={() => setOpen(true)}>
-          <Icon name="plus" size={14} /> Notitie bij deze stelling
+          <Icon name="plus" size={14} /> Note for this position
         </button>
       </div>
     );
   }
   return (
     <div className="section stack" style={{ gap: 6 }}>
-      <h3>Notitie</h3>
+      <h3>Note</h3>
       <textarea
         className="input"
         rows={2}
         value={text}
-        placeholder="Plannen, pionnenstructuur, typische manoeuvres…"
+        placeholder="Plans, pawn structure, typical manoeuvres…"
         onChange={(e) => setText(e.target.value)}
-        onBlur={() => text !== saved && updateRep(rep.id, (r) => setNote(r, positionKey, text), 'notitie', { undoable: false })}
+        onBlur={() => text !== saved && updateRep(rep.id, (r) => setNote(r, positionKey, text), 'note', { undoable: false })}
       />
     </div>
   );

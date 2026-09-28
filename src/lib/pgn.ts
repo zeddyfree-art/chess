@@ -20,16 +20,16 @@ export function importPgn(rep: Repertoire, text: string): ImportResult {
   let added = 0;
 
   games.forEach((game, gi) => {
-    const label = game.headers.get('Event') || game.headers.get('ChapterName') || `partij ${gi + 1}`;
+    const label = game.headers.get('Event') || game.headers.get('ChapterName') || `game ${gi + 1}`;
     const start = startingPosition(game.headers);
     if (start.isErr) {
-      errors.push(`${label}: ongeldige startpositie`);
+      errors.push(`${label}: invalid starting position`);
       return;
     }
     const startPos = start.value as Chess;
     const startKey = keyOfPos(startPos);
     if (startKey !== ROOT && !reachable(result.positions).has(startKey)) {
-      errors.push(`${label}: begint vanaf een positie die niet in je repertoire zit (overgeslagen)`);
+      errors.push(`${label}: starts from a position that is not in your repertoire (skipped)`);
       return;
     }
 
@@ -39,7 +39,7 @@ export function importPgn(rep: Repertoire, text: string): ImportResult {
         const p = pos.clone();
         const move = parseSan(p, child.data.san);
         if (!move) {
-          errors.push(`${label}: onleesbare zet "${child.data.san}" (tak overgeslagen)`);
+          errors.push(`${label}: unreadable move "${child.data.san}" (branch skipped)`);
           continue;
         }
         const from = keyOfPos(p);
@@ -62,7 +62,7 @@ export function importPgn(rep: Repertoire, text: string): ImportResult {
     added += countMoves(result) - before;
   });
 
-  if (!games.length) errors.push('Geen PGN-partijen gevonden.');
+  if (!games.length) errors.push('No PGN games found.');
   return { rep: result, games: games.length, added, errors };
 }
 
@@ -92,7 +92,7 @@ export function exportPgn(rep: Repertoire): string {
       if (m.comment) comments.push(m.comment);
       const transposition = expanded.has(m.to);
       if (!transposition && rep.notes[m.to]) comments.push(rep.notes[m.to]);
-      if (transposition) comments.push('transpositie');
+      if (transposition) comments.push('transposition');
       const child = new ChildNode<PgnNodeData>({ san: m.san, comments: comments.length ? comments : undefined });
       parent.children.push(child);
       if (!transposition) {

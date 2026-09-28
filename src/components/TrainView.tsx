@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatLine, moveFromBoard, uciToArrow } from '../lib/chess';
-import { findPath, isMine, movesAt, ROOT, type Repertoire } from '../lib/repertoire';
-import { buildQueue, counts, formatInterval, gradeCard, Rating, type TrainItem } from '../lib/srs';
+import { edgeId, findPath, isMine, movesAt, myEdgesInOrder, reachable, ROOT, type PathStep, type Repertoire } from '../lib/repertoire';
+import { buildQueue, counts, formatInterval, gradeCard, Rating, State, type TrainItem } from '../lib/srs';
 import { activeRep, useApp } from '../lib/store';
 import { Board, type Shape } from './Board';
 import { Icon } from './Icon';
@@ -10,50 +10,101 @@ type Mode = 'review' | 'lines';
 
 export function TrainView() {
   const rep = useApp(activeRep)!;
+  const scope = useApp((s) => s.trainScope);
+  const trainFrom = useApp((s) => s.trainFrom);
   const [mode, setMode] = useState<Mode | null>(null);
   const [newLimit, setNewLimit] = useState(() => Number(localStorage.getItem('new-limit') ?? 10));
   useEffect(() => localStorage.setItem('new-limit', String(newLimit)), [newLimit]);
   // Freeze the queue when a session starts so grading doesn't reshuffle it.
   const [queue, setQueue] = useState<QItem[]>([]);
 
-  const c = counts(rep);
-  const empty = c.total === 0;
+  const scopePath = useMemo(() => (scope ? findPath(rep, scope) : []), [rep, scope]);
+  const scopeKeys = useMemo(() => (scope && scopePath ? reachable(rep.positions, scope) : undefined), [rep, scope, scopePath]);
+  const branchEdges = useMemo(
+    () => myEdgesInOrder(rep).filter((e) => !scopeKeys || scopeKeys.has(e.from)),
+    [rep, scopeKeys],
+  );
 
+  // The branch may have disappeared (pruned, or synced from another device).
+  const lost = !!scope && !scopePath;
+  useEffect(() => {
+    if (lost) trainFrom(null);
+  }, [lost, trainFrom]);
+  if (lost) return null;
   if (mode === 'review') return <ReviewSession rep={rep} initial={queue} onExit={() => setMode(null)} />;
-  if (mode === 'lines') return <LinesSession rep={rep} onExit={() => setMode(null)} />;
+  if (mode === 'lines') return <LinesSession rep={rep} start={scopePath ?? []} onExit={() => setMode(null)} />;
 
-  const start = () => {
-    setQueue(buildQueue(rep, { newLimit }).map((i) => ({ ...i, kind: i.isNew ? 'learn' : 'review' })));
+  const now = Date.now();
+  const c = { due: 0, fresh: 0, learned: 0 };
+  for (const e of branchEdges) {
+    const card = rep.cards[edgeId(e.from, e.uci)];
+    if (!card) continue;
+    if (card.state === State.New) c.fresh++;
+    else {
+      c.learned++;
+      if (card.due <= now) c.due++;
+    }
+  }
+  const total = c.fresh + c.learned;
+
+  const startReview = () => {
+    setQueue(buildQueue(rep, { newLimit, subtreeOf: scopeKeys }).map((i) => ({ ...i, kind: i.isNew ? 'learn' : 'review' })));
+    setMode('review');
+  };
+
+  const startDrill = () => {
+    setQueue(
+      branchEdges.map((e) => {
+        const id = edgeId(e.from, e.uci);
+        const isNew = rep.cards[id]?.state === State.New;
+        return { id, from: e.from, uci: e.uci, san: e.san, isNew, kind: isNew ? 'learn' : 'review' };
+      }),
+    );
     setMode('review');
   };
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto' }} className="stack">
       <div className="card card-pad stack">
-        <h2>Trainen: {rep.name}</h2>
-        {empty ? (
-          <div className="empty">Nog geen zetten om te trainen. Bouw eerst je repertoire op.</div>
+        <div className="row wrap">
+          <h2>Train: {rep.name}</h2>
+          <span className="spacer" />
+          {scope && (
+            <button className="btn sm ghost" onClick={() => trainFrom(null)}>
+              <Icon name="x" size={14} /> Whole repertoire
+            </button>
+          )}
+        </div>
+        {scope && (
+          <div className="notice small">
+            Only the branch after <b>{formatLine((scopePath ?? []).map((p) => p.san))}</b>
+          </div>
+        )}
+        {total === 0 ? (
+          <div className="empty">
+            {scope ? 'There are none of your moves in this branch yet.' : 'No moves to train yet. Build your repertoire first.'}
+          </div>
         ) : (
           <>
             <div className="stat-row">
               <div className="stat">
                 <b style={{ color: 'var(--due)' }}>{c.due}</b>
-                <span>te herhalen</span>
+                <span>due</span>
               </div>
               <div className="stat">
                 <b style={{ color: 'var(--accent)' }}>{c.fresh}</b>
-                <span>nieuw</span>
+                <span>new</span>
               </div>
               <div className="stat">
                 <b>{c.learned}</b>
-                <span>geleerd</span>
+                <span>learned</span>
               </div>
             </div>
-            <div className="progress" title="Deel van je zetten dat je al hebt geleerd">
-              <div style={{ width: `${(c.learned / Math.max(1, c.total)) * 100}%` }} />
+            <div className="progress" title="Share of your moves you have learned">
+              <div style={{ width: `${(c.learned / Math.max(1, total)) * 100}%` }} />
             </div>
             <div className="row wrap">
-              <span className="muted">Nieuwe zetten per sessie</span>
+              <span className="muted">New moves per session</span>
               {[5, 10, 20, 50].map((n) => (
                 <span key={n} className={`chip ${newLimit === n ? 'on' : ''}`} onClick={() => setNewLimit(n)}>
                   {n}
@@ -61,26 +112,32 @@ export function TrainView() {
               ))}
             </div>
             <div className="row wrap">
-              <button className="btn primary" disabled={!c.due && !c.fresh} onClick={start}>
-                <Icon name="train" size={16} /> Start herhaling ({c.due + Math.min(c.fresh, newLimit)})
+              <button className="btn primary" disabled={!c.due && !c.fresh} onClick={startReview}>
+                <Icon name="train" size={16} /> Start review ({c.due + Math.min(c.fresh, newLimit)})
               </button>
+              {scope && (
+                <button className="btn" onClick={startDrill} title="Quiz every one of your moves in this branch, due or not">
+                  <Icon name="target" size={16} /> Drill whole branch ({total})
+                </button>
+              )}
               <button className="btn" onClick={() => setMode('lines')}>
-                <Icon name="tree" size={16} /> Vrij lijnen oefenen
+                <Icon name="tree" size={16} /> Practice lines{scope ? ' from here' : ''}
               </button>
             </div>
           </>
         )}
       </div>
       <div className="card card-pad help stack" style={{ gap: 6 }}>
-        <b style={{ color: 'var(--text)' }}>Hoe het werkt</b>
+        <b style={{ color: 'var(--text)' }}>How it works</b>
         <div>
-          Elke zet die jíj speelt is een kaartje. De app speelt de lijn tot die stelling en jij moet je zet vinden. Het
-          FSRS-algoritme (ook gebruikt door Anki) plant de volgende herhaling: wat je goed kent zie je steeds minder vaak,
-          wat je vergeet komt snel terug.
+          Every move <i>you</i> play is a card. The app plays the line up to that position and you have to find your move.
+          The FSRS algorithm (also used by Anki) schedules the next review: what you know well comes back less and less
+          often, what you forget comes back soon.
         </div>
         <div>
-          Nieuwe zetten krijg je eerst te zien (groene pijl) en worden later in dezelfde sessie overhoord. <b>Vrij oefenen</b>{' '}
-          speelt willekeurige lijnen helemaal uit en telt niet mee voor de planning.
+          New moves are shown first (green arrow) and quizzed again later in the same session. <b>Practice lines</b> plays
+          random lines all the way through and does not affect the schedule. Use <b>Train from here</b> in the tree or on the
+          build board to focus on one branch.
         </div>
       </div>
     </div>
@@ -145,7 +202,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
         setShapes([{ orig, dest, brush: 'green' } as Shape]);
         setMessage(
           <>
-            Nieuwe zet: speel <b>{item.san}</b>
+            New move: play <b>{item.san}</b>
             {comment(rep, item) && <div className="small muted">{comment(rep, item)}</div>}
           </>,
         );
@@ -187,13 +244,13 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
       let info: React.ReactNode = null;
       if (item.kind === 'learn') {
         setQueue((q) => [...q, { ...item, kind: 'test' }]);
-        info = 'Onthouden! Je krijgt hem straks nog een keer.';
+        info = 'Remember it! You will get it again in a moment.';
       } else if (item.kind === 'retry') {
-        info = 'Goed zo.';
+        info = 'Well done.';
       } else if (!mistake) {
         const due = grade(hinted ? Rating.Hard : Rating.Good);
         setScore((s) => ({ ...s, good: s.good + 1 }));
-        info = `Goed! Volgende herhaling over ${formatInterval(due - Date.now())}.`;
+        info = `Correct! Next review in ${formatInterval(due - Date.now())}.`;
       }
       setMessage(
         <>
@@ -214,7 +271,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
       const [o, d] = uciToArrow(item.uci);
       setMessage(
         <>
-          Niet je repertoirezet. Speel <b>{item.san}</b>.
+          Not your repertoire move. Play <b>{item.san}</b>.
         </>,
       );
       later(() => {
@@ -237,24 +294,24 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
     const c = counts(rep);
     return (
       <div style={{ maxWidth: 560, margin: '40px auto' }} className="card card-pad stack">
-        <h2>Sessie klaar 🎉</h2>
+        <h2>Session complete 🎉</h2>
         <div className="stat-row">
           <div className="stat">
             <b style={{ color: 'var(--mine)' }}>{score.good}</b>
-            <span>in één keer goed</span>
+            <span>right first time</span>
           </div>
           <div className="stat">
             <b style={{ color: 'var(--gap)' }}>{score.bad}</b>
-            <span>fout (komen snel terug)</span>
+            <span>wrong (coming back soon)</span>
           </div>
           <div className="stat">
             <b>{c.due}</b>
-            <span>nu nog te herhalen</span>
+            <span>still due</span>
           </div>
         </div>
         <div className="row">
           <button className="btn primary" onClick={onExit}>
-            Terug
+            Back
           </button>
         </div>
       </div>
@@ -279,17 +336,17 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
         <div className="card card-pad stack">
           <div className="row">
             <span className="big-count">{queue.length - index}</span>
-            <span className="muted">te gaan</span>
+            <span className="muted">to go</span>
             <span className="spacer" />
-            <span className="badge mine">{score.good} goed</span>
-            <span className="badge gap">{score.bad} fout</span>
+            <span className="badge mine">{score.good} right</span>
+            <span className="badge gap">{score.bad} wrong</span>
           </div>
           <div className="progress">
             <div style={{ width: `${(index / Math.max(1, queue.length)) * 100}%` }} />
           </div>
-          <div className="small muted">{context || 'Beginstelling'}</div>
+          <div className="small muted">{context || 'Starting position'}</div>
           <div className={`feedback ${phase === 'good' ? 'good' : phase === 'bad' || mistake ? 'bad' : 'info'}`}>
-            {message ?? (item.kind === 'retry' ? 'Nog een keer: wat speel je hier?' : 'Wat speel je hier?')}
+            {message ?? (item.kind === 'retry' ? 'Once more: what do you play here?' : 'What do you play here?')}
           </div>
           <div className="row">
             <button className="btn" onClick={hint} disabled={phase !== 'await' || item.kind === 'learn' || hinted || mistake}>
@@ -297,13 +354,13 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
             </button>
             <span className="spacer" />
             <button className="btn ghost" onClick={onExit}>
-              Stoppen
+              Stop
             </button>
           </div>
         </div>
         <div className="help">
-          Een hint (welk stuk) telt als “moeilijk”, een foute zet als “opnieuw”. Kaartjes die je fout had komen aan het eind
-          van de sessie terug.
+          A hint (which piece) counts as “hard”, a wrong move as “again”. Cards you got wrong come back at the end of the
+          session.
         </div>
       </div>
     </div>
@@ -315,12 +372,14 @@ function comment(rep: Repertoire, item: TrainItem): string | undefined {
 }
 
 /** Ungraded practice: plays random prepared opponent moves; you answer with your repertoire until the line ends. */
-function LinesSession({ rep, onExit }: { rep: Repertoire; onExit: () => void }) {
-  const [pos, setPos] = useState(ROOT);
+function LinesSession({ rep, start, onExit }: { rep: Repertoire; start: PathStep[]; onExit: () => void }) {
+  const startKey = start.at(-1)?.to ?? ROOT;
+  const startArrow = start.length ? uciToArrow(start[start.length - 1].uci) : null;
+  const [pos, setPos] = useState(startKey);
   // What the board shows; differs from `pos` briefly while a wrong move is displayed.
-  const [shown, setShown] = useState(ROOT);
-  const [line, setLine] = useState<string[]>([]);
-  const [lastMove, setLastMove] = useState<[string, string] | null>(null);
+  const [shown, setShown] = useState(startKey);
+  const [line, setLine] = useState<string[]>(start.map((s) => s.san));
+  const [lastMove, setLastMove] = useState<[string, string] | null>(startArrow);
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [message, setMessage] = useState<React.ReactNode>(null);
   const [stats, setStats] = useState({ lines: 0, good: 0, bad: 0 });
@@ -340,8 +399,8 @@ function LinesSession({ rep, onExit }: { rep: Repertoire; onExit: () => void }) 
   const restart = () => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
-    go(ROOT, null);
-    setLine([]);
+    go(startKey, start.length ? start[start.length - 1].uci : null);
+    setLine(start.map((s) => s.san));
     setShapes([]);
     setMessage(null);
     setWaiting(false);
@@ -352,8 +411,8 @@ function LinesSession({ rep, onExit }: { rep: Repertoire; onExit: () => void }) 
   useEffect(() => {
     const moves = movesAt(rep, pos);
     if (!moves.length) {
-      if (line.length) {
-        setMessage(<>Einde van de lijn ✓</>);
+      if (line.length > start.length) {
+        setMessage(<>End of the line ✓</>);
         setStats((s) => ({ ...s, lines: s.lines + 1 }));
         later(restart, 1200);
       }
@@ -388,7 +447,7 @@ function LinesSession({ rep, onExit }: { rep: Repertoire; onExit: () => void }) 
       setWaiting(true);
       setMessage(
         <>
-          Je repertoire speelt hier <b>{expected.map((x) => x.san).join(' of ')}</b>.
+          Your repertoire plays <b>{expected.map((x) => x.san).join(' or ')}</b> here.
         </>,
       );
       later(() => {
@@ -415,21 +474,21 @@ function LinesSession({ rep, onExit }: { rep: Repertoire; onExit: () => void }) 
       <div className="stack">
         <div className="card card-pad stack">
           <div className="row">
-            <h2>Vrij oefenen</h2>
+            <h2>Practice lines</h2>
             <span className="spacer" />
-            <span className="badge">{stats.lines} lijnen</span>
-            <span className="badge mine">{stats.good} goed</span>
-            <span className="badge gap">{stats.bad} fout</span>
+            <span className="badge">{stats.lines} lines</span>
+            <span className="badge mine">{stats.good} right</span>
+            <span className="badge gap">{stats.bad} wrong</span>
           </div>
-          <div className="small muted">{formatLine(line) || 'Beginstelling'}</div>
-          <div className="feedback info">{message ?? (isMine(rep, pos) ? 'Jouw zet.' : 'Tegenstander denkt na…')}</div>
+          <div className="small muted">{formatLine(line) || 'Starting position'}</div>
+          <div className="feedback info">{message ?? (isMine(rep, pos) ? (movesAt(rep, pos).length ? 'Your move.' : 'Nothing prepared here.') : 'Opponent is thinking…')}</div>
           <div className="row">
             <button className="btn" onClick={restart}>
-              Nieuwe lijn
+              New line
             </button>
             <span className="spacer" />
             <button className="btn ghost" onClick={onExit}>
-              Stoppen
+              Stop
             </button>
           </div>
         </div>

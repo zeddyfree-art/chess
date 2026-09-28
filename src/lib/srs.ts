@@ -90,10 +90,10 @@ export function formatInterval(ms: number): string {
   const min = ms / 60000;
   if (min < 60) return `${Math.max(1, Math.round(min))} min`;
   const h = min / 60;
-  if (h < 24) return `${Math.round(h)} u`;
+  if (h < 24) return `${Math.round(h)} h`;
   const d = h / 24;
   if (d < 31) return `${Math.round(d)} d`;
   const mo = d / 30.4;
-  if (mo < 12) return `${Math.round(mo)} mnd`;
-  return `${(d / 365).toFixed(1)} jr`;
+  if (mo < 12) return `${Math.round(mo)} mo`;
+  return `${(d / 365).toFixed(1)} y`;
 }

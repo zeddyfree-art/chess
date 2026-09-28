@@ -46,7 +46,7 @@ class StockfishEngine {
         }
       };
       worker.addEventListener('message', onBoot);
-      worker.addEventListener('error', (e) => reject(new Error(`Stockfish kon niet laden: ${e.message}`)));
+      worker.addEventListener('error', (e) => reject(new Error(`Stockfish failed to load: ${e.message}`)));
       worker.postMessage('uci');
       worker.postMessage('setoption name Hash value 64');
       worker.postMessage('isready');

@@ -3,3 +3,4 @@ dist
 public/stockfish
 *.log
 .DS_Store
+public/maia3

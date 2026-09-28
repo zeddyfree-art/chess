@@ -27,7 +27,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # The human-like opponent's model (45 MB) is served by the site itself.
+      - run: npm run fetch-maia
       - run: npm run build
+        env:
+          # Optional: Settings → Secrets and variables → Actions → Variables → GOOGLE_CLIENT_ID
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
       # Skip publishing (instead of failing) while GitHub Pages is not switched on yet.
       - id: pages
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request'
@@ -38,7 +43,7 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::GitHub Pages staat nog uit: Settings → Pages → Source: GitHub Actions, en draai deze workflow daarna opnieuw."
+            echo "::notice::GitHub Pages is not enabled yet: Settings → Pages → Source: GitHub Actions, then re-run this workflow."
           fi
       - if: steps.pages.outputs.enabled == 'true'
         uses: actions/upload-pages-artifact@v3

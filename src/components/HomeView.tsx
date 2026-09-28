@@ -29,20 +29,20 @@ export function HomeView() {
     <div className="stack" style={{ gap: 20 }}>
       <div className="row wrap">
         <div>
-          <h2 style={{ fontSize: 22 }}>Hoi {profile.name}</h2>
+          <h2 style={{ fontSize: 22 }}>Hi {profile.name}</h2>
           <div className="muted">
             {reps.length === 0
-              ? 'Maak je eerste repertoire aan.'
+              ? 'Create your first repertoire.'
               : totalDue > 0
-                ? `Je hebt vandaag ${totalDue} ${totalDue === 1 ? 'zet' : 'zetten'} te herhalen.`
+                ? `You have ${totalDue} ${totalDue === 1 ? 'move' : 'moves'} to review today.`
                 : totalNew > 0
-                  ? `Niets te herhalen — nog ${totalNew} nieuwe ${totalNew === 1 ? 'zet' : 'zetten'} om te leren.`
-                  : 'Alles herhaald voor vandaag.'}
+                  ? `Nothing due — ${totalNew} new ${totalNew === 1 ? 'move' : 'moves'} to learn.`
+                  : 'All reviews done for today.'}
           </div>
         </div>
         <span className="spacer" />
         <button className="btn primary" onClick={() => setCreating(true)}>
-          <Icon name="plus" size={16} /> Nieuw repertoire
+          <Icon name="plus" size={16} /> New repertoire
         </button>
       </div>
 
@@ -53,40 +53,40 @@ export function HomeView() {
               <div className={`side-icon ${rep.side}`}>{rep.side === 'white' ? '♔' : '♚'}</div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 650, fontSize: 15 }}>{rep.name}</div>
-                <div className="small muted">{rep.side === 'white' ? 'met wit' : 'met zwart'}</div>
+                <div className="small muted">{rep.side === 'white' ? 'with White' : 'with Black'}</div>
               </div>
             </div>
             <div className="stat-row">
               <div className="stat">
                 <b>{st.moves}</b>
-                <span>zetten</span>
+                <span>moves</span>
               </div>
               <div className="stat">
                 <b>{st.lineEnds}</b>
-                <span>lijnen</span>
+                <span>lines</span>
               </div>
               <div className="stat">
                 <b style={{ color: srs.due ? 'var(--due)' : undefined }}>{srs.due}</b>
-                <span>te herhalen</span>
+                <span>due</span>
               </div>
               <div className="stat">
                 <b style={{ color: srs.fresh ? 'var(--accent)' : undefined }}>{srs.fresh}</b>
-                <span>nieuw</span>
+                <span>new</span>
               </div>
             </div>
-            <div className="progress" title={`${srs.learned} van ${srs.total} zetten geleerd`}>
+            <div className="progress" title={`${srs.learned} of ${srs.total} moves learned`}>
               <div style={{ width: `${(srs.learned / Math.max(1, srs.total)) * 100}%` }} />
             </div>
             <div className="row" onClick={(e) => e.stopPropagation()}>
               <button className="btn sm" onClick={() => open(rep.id, 'build')}>
-                <Icon name="board" size={14} /> Bouwen
+                <Icon name="board" size={14} /> Build
               </button>
               <button className="btn sm" onClick={() => open(rep.id, 'tree')}>
-                <Icon name="tree" size={14} /> Boom
+                <Icon name="tree" size={14} /> Tree
               </button>
               <span className="spacer" />
               <button className={`btn sm ${srs.due || srs.fresh ? 'primary' : ''}`} onClick={() => open(rep.id, 'train')}>
-                <Icon name="train" size={14} /> Trainen
+                <Icon name="train" size={14} /> Train
               </button>
             </div>
           </div>
@@ -95,9 +95,9 @@ export function HomeView() {
           <div className="card card-pad stack">
             <b>Tip</b>
             <div className="muted">
-              Maak bijvoorbeeld één repertoire met wit en twee met zwart (tegen 1.e4 en tegen 1.d4). Heb je al een repertoire in
-              Chessbook of een Lichess-studie? Exporteer het als PGN en importeer het hier — er is geen limiet op het aantal
-              zetten.
+              For example, make one repertoire with White and two with Black (against 1.e4 and against 1.d4). Already have a
+              repertoire in Chessbook or a Lichess study? Export it as PGN and import it here — there is no limit on the number
+              of moves.
             </div>
           </div>
         )}
@@ -117,15 +117,15 @@ export function NewRepertoireDialog({ onClose }: { onClose: () => void }) {
   const [errors, setErrors] = useState<string[]>([]);
 
   const create = () => {
-    let rep = newRepertoire(profileId, name.trim() || (side === 'white' ? 'Wit' : 'Zwart'), side);
+    let rep = newRepertoire(profileId, name.trim() || (side === 'white' ? 'White' : 'Black'), side);
     if (pgn.trim()) {
       const res = importPgn(rep, pgn);
       if (res.added === 0) {
-        setErrors(res.errors.length ? res.errors : ['Geen zetten gevonden in de PGN.']);
+        setErrors(res.errors.length ? res.errors : ['No moves found in the PGN.']);
         return;
       }
       rep = res.rep;
-      showToast(`${res.added} zetten geïmporteerd uit ${res.games} ${res.games === 1 ? 'partij' : 'partijen'}`);
+      showToast(`Imported ${res.added} moves from ${res.games} ${res.games === 1 ? 'game' : 'games'}`);
     }
     addRepertoire(rep);
     setView('build');
@@ -139,47 +139,47 @@ export function NewRepertoireDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Dialog title="Nieuw repertoire" onClose={onClose}>
+    <Dialog title="New repertoire" onClose={onClose}>
       <div className="field">
-        <label>Naam</label>
+        <label>Name</label>
         <input
           className="input"
           autoFocus
           value={name}
-          placeholder={side === 'white' ? 'bv. Wit: 1.e4' : 'bv. Zwart tegen 1.d4'}
+          placeholder={side === 'white' ? 'e.g. White: 1.e4' : 'e.g. Black vs 1.d4'}
           onChange={(e) => setName(e.target.value)}
         />
       </div>
       <div className="field">
-        <label>Je speelt met</label>
+        <label>You play</label>
         <div className="row">
           <button className={`btn ${side === 'white' ? 'primary' : ''}`} onClick={() => setSide('white')}>
-            ♔ Wit
+            ♔ White
           </button>
           <button className={`btn ${side === 'black' ? 'primary' : ''}`} onClick={() => setSide('black')}>
-            ♚ Zwart
+            ♚ Black
           </button>
         </div>
       </div>
       <div className="field">
-        <label>PGN importeren (optioneel)</label>
+        <label>Import PGN (optional)</label>
         <textarea
           className="input"
           rows={4}
           value={pgn}
-          placeholder="Plak hier een PGN met varianten, bv. een export uit Chessbook of een Lichess-studie…"
+          placeholder="Paste a PGN with variations, e.g. an export from Chessbook or a Lichess study…"
           onChange={(e) => setPgn(e.target.value)}
         />
         <input type="file" accept=".pgn,text/plain" onChange={(e) => readFile(e.target.files?.[0])} />
-        <div className="help">Meerdere partijen/hoofdstukken worden samengevoegd; transposities worden automatisch herkend.</div>
+        <div className="help">Multiple games/chapters are merged; transpositions are detected automatically.</div>
       </div>
       {errors.length > 0 && <div className="notice error small">{errors.slice(0, 4).join(' · ')}</div>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <button className="btn ghost" onClick={onClose}>
-          Annuleren
+          Cancel
         </button>
         <button className="btn primary" onClick={create}>
-          Aanmaken
+          Create
         </button>
       </div>
     </Dialog>

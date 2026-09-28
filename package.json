@@ -9,12 +9,14 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "postinstall": "node scripts/copy-stockfish.mjs"
+    "postinstall": "node scripts/copy-assets.mjs",
+    "fetch-maia": "node scripts/fetch-maia.mjs"
   },
   "dependencies": {
     "@lichess-org/chessground": "^10.1.1",
     "chessops": "^0.15.1",
     "idb-keyval": "^6.3.0",
+    "onnxruntime-web": "^1.30.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "stockfish": "^19.0.0",

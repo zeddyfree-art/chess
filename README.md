@@ -1,116 +1,107 @@
-# Repertoire — openingen bouwen, controleren en trainen
+# Repertoire — build, check and train your chess openings
 
-Een webapp in de geest van Chessbook, maar **zonder zettenlimiet**, met **meerdere spelers** (bv. ouder en kind) en
-met alles lokaal in je browser. Je bouwt per profiel openingsrepertoires op, ziet in één oogopslag welke takken je
-hebt, snoeit wat je niet nodig hebt, controleert met een engine en met de Lichess-database wat er op jouw
-ratingniveau echt gespeeld wordt, en traint met spaced repetition (FSRS).
+A web app in the spirit of Chessbook, but with **no move limit**, **several players** per device, **sync
+across devices** through your own Google Drive, and a **human-like practice opponent**. Build opening
+repertoires, see all branches at a glance, prune what you don't need, check your moves with an engine and
+against what people at your level actually play (Lichess database), train with spaced repetition (FSRS),
+and play practice games from any position.
 
-## Wat zit erin
+Live: <https://zeddyfree-art.github.io/chess/>
 
-| Scherm | Wat je er doet |
+## What's inside
+
+| Screen | What you do there |
 | --- | --- |
-| **Overzicht** | Repertoires van het actieve profiel, met aantallen zetten/lijnen en wat er vandaag te herhalen is. |
-| **Bouwen** | Bord + huidige lijn. Zetten die je speelt zijn eerst een *voorstel* (blauw gestippeld); met **Opslaan** (Enter) komen ze in je repertoire, met **Verwerpen** (Esc) niet. Daarnaast: je voorbereide zetten in deze stelling (met aantal vervolgzetten, commentaar, ★ hoofdzet, verwijderen), een notitie per stelling, en tabbladen **Lichess-partijen**, **Meesters** en **Engine**. |
-| **Boom** | De hele repertoireboom als diagram. Groen = jouw zet, omlijnd = zet van de tegenstander met percentage hoe vaak die gespeeld wordt; lijndikte = populariteit; rode stippel-knopen = **gaten** (vaak gespeeld, niet voorbereid). In- en uitklappen per tak of tot een diepte, markeren van “te herhalen”, “engine-twijfels” en “zeldzame zetten”. Selecteer een knoop en **Snoei tak** (of Delete) — je ziet vooraf hoeveel zetten en trainingskaarten verdwijnen, en alles is ongedaan te maken (Ctrl+Z). |
-| **Trainen** | Herhaling met FSRS: elke zet die jíj speelt is een kaartje. Nieuwe zetten worden eerst getoond en later in de sessie overhoord. Daarnaast **Vrij oefenen**: willekeurige lijnen uitspelen zonder dat het meetelt. |
-| **Controle** | **Gaten zoeken**: loopt je repertoire af tegen de Lichess-database (ratinggroepen/tempo’s van het profiel) en sorteert ontbrekende antwoorden op hoe vaak je ze gaat tegenkomen, plus een dekkingspercentage. **Engine-controle**: beoordeelt elke eigen zet (?!, ?, ??) met de Lichess cloud-evaluatie of lokaal Stockfish 19. |
-| **Instellingen** | Profielen (naam, kleur, ratinggroepen, tempo’s), Lichess-koppeling, PGN-export/-import per repertoire, back-up van alles als JSON. |
+| **Overview** | The active player's repertoires, with moves, lines and what is due today. |
+| **Build** | Board plus the current line. Moves you play are a *proposal* (dashed blue) until you **Save** (Enter) or **Discard** (Esc). Next to it: your prepared moves in this position (with number of follow-up moves, comments, ★ main move, delete), a note per position, and tabs **Lichess games**, **Masters** and **Engine**. **Train from here** and **Play from here** start from the position on the board. |
+| **Tree** | The whole repertoire as a diagram. Green = your move, outlined = opponent move with how often it is played; line thickness = popularity; red dashed nodes = **gaps** (played often, not prepared). Collapse/expand per branch or to a depth, highlight due / dubious / rare moves. Select a node to open it, train or play from it, or **Prune branch** (Delete) — you see beforehand how many moves and cards disappear, and everything can be undone (Ctrl+Z). |
+| **Train** | FSRS spaced repetition: each move you play is a card. New moves are shown first and quizzed again later in the session. **Practice lines** plays random lines through without affecting the schedule. Scoped to one branch when started with *Train from here* (review, drill the whole branch, or practice lines). |
+| **Play** | Practice games against **Maia-3**, a human-like neural network, at any strength from 600 to 2600. In the opening it plays what people at that level actually play (Lichess database) or sticks to your prepared lines; afterwards it plays like a human of that rating. Tells you when you (or it) leave your repertoire; take back, copy PGN, analyse on Lichess, or open the game in Build to add moves. |
+| **Check** | **Find gaps**: walks your repertoire against the Lichess database (the player's rating groups and time controls) and sorts missing replies by how often you'll meet them, with a coverage percentage. **Engine check**: rates each of your moves (?!, ?, ??) with the Lichess cloud evaluation or local Stockfish 19. |
+| **Settings** | Players (name, own rating, colour, rating groups, time controls), Google Drive sync and backups, Lichess connection, PGN export/import per repertoire, backup file download/restore. |
 
-Transposities worden herkend: het repertoire is intern een graaf van *stellingen*, dus 1.d4 Pf6 2.c4 e6 en
-1.c4 e6 2.d4 Pf6 delen hun vervolg.
+Transpositions are recognised: the repertoire is a graph of *positions*, so 1.d4 Nf6 2.c4 e6 and 1.c4 e6 2.d4 Nf6
+share their continuation.
 
-## De Lichess-database: hoe de koppeling werkt
+## Your data and sync
 
-Lichess heeft een gratis **Opening Explorer API** (`https://explorer.lichess.org`), dezelfde database als het
-“openingsboek” op lichess.org:
+Everything is stored in the browser (IndexedDB) — no account, no server. Optionally connect **Google Drive**
+(Settings → Sync & automatic backup) on each device you use:
 
-```
-GET https://explorer.lichess.org/lichess?fen=<FEN>&ratings=1600,1800&speeds=blitz,rapid,classical&moves=20
-GET https://explorer.lichess.org/masters?fen=<FEN>
-Authorization: Bearer <token>
-```
+- all devices share the same players, repertoires and training progress;
+- a dated backup is written to the `Repertoire app` folder in your Drive once a day (last 30 kept), and can be
+  restored from Settings;
+- the app uses the `drive.file` permission: it can only see the files it created itself.
 
-- `ratings` zijn groepen: `0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500`; elke waarde betekent “van hier tot de
-  volgende” (1600 = 1600–1799), op basis van de gemiddelde rating van beide spelers. Zo kies je per profiel het
-  niveau van je tegenstanders — jouw niveau en dat van je dochter krijgen hun eigen filters.
-- `speeds`: `ultraBullet, bullet, blitz, rapid, classical, correspondence`.
-- Antwoord: per zet `san`, `uci`, en aantallen `white`/`draws`/`black`, plus de openingsnaam (ECO).
-- **Sinds 2026 vraagt Lichess een login** voor de explorer. Deze app doet dat met “Inloggen met Lichess” (OAuth 2
-  met PKCE: je logt in op lichess.org zelf, de app krijgt alleen een token zonder extra rechten). Alternatief: maak een
-  persoonlijk token zonder rechten op <https://lichess.org/account/oauth/token> en plak het in Instellingen. Het token
-  blijft in je browser.
-- Lichess vraagt API-gebruikers om één verzoek tegelijk te doen en na een `429` een minuut te wachten; de app doet
-  dat en bewaart antwoorden 30 dagen in een cache (IndexedDB), zodat terugbladeren en de boom niets opnieuw ophalen.
+Google gives browser apps one-hour sessions, so after a break the cloud icon in the top bar may ask you to
+reconnect with one click. Local changes are kept meanwhile. If two devices edited the same repertoire offline, the
+latest edit wins and training progress is merged per card; deletions are remembered.
 
-Engine: eerst `https://lichess.org/api/cloud-eval?fen=…&multiPv=3` (vooraf berekende, diepe Stockfish-evaluaties van
-populaire stellingen, geen login nodig). Staat de stelling daar niet in, dan rekent **Stockfish 19 (WASM)** lokaal in
-een Web Worker.
+The site owner has to create a Google OAuth client ID once: see [docs/google-drive-setup.md](docs/google-drive-setup.md).
 
-## Lokaal draaien
+Switching from Chessbook: export your repertoire as PGN there and choose it under *New repertoire*. Variations,
+comments and multiple chapters are merged.
 
-Vereist [Node.js](https://nodejs.org) 22 of nieuwer.
+## The Lichess database
+
+The app uses the Lichess **Opening Explorer** API (`https://explorer.lichess.org/lichess?fen=…&ratings=1600,1800&speeds=blitz,rapid`).
+Ratings are groups (`0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500`, each up to the next), based on the average
+rating of both players. **Since 2026 Lichess requires a login** for the explorer; the app does this with "Log in
+with Lichess" (OAuth 2 with PKCE — you log in on lichess.org itself and the app only gets a token without extra
+permissions), or you paste a personal token with no scopes. Requests are made one at a time and cached for 30 days.
+
+Engine: first `https://lichess.org/api/cloud-eval` (deep precomputed evaluations, no login); otherwise
+**Stockfish 19 (WASM)** runs locally in a Web Worker.
+
+## The human-like opponent
+
+[Maia-3](https://www.maiachess.com/) (CSSLab, University of Toronto) is a network trained on human games that predicts
+the move a player of a given rating would make; one model covers 600–2600. The app runs it in the browser with
+ONNX Runtime Web (±150 ms per move on a laptop), downloaded once (±50 MB) and cached. The board encoding was checked
+against the reference implementation of the Maia platform. Move choice is sampled from the predicted probabilities
+(very unlikely moves excluded), so it plays varied, human moves — including human mistakes. Inspired by Noctie, the
+opening phase uses the Lichess database at the opponent's level while there are enough games, or your own prepared
+lines if you choose so.
+
+## Run locally
+
+Requires [Node.js](https://nodejs.org) 22+.
 
 ```bash
-npm install     # installeert ook Stockfish en kopieert het naar public/stockfish
-npm run dev     # open de getoonde URL (http://localhost:5173)
-npm test        # unit-tests (repertoiregraaf, PGN, SRS)
-npm run build   # productiebuild in dist/
+npm install          # also copies Stockfish to public/
+npm run fetch-maia   # optional: serve the Maia model locally (otherwise it is fetched from GitHub)
+npm run dev          # open http://localhost:5173
+npm test             # unit tests (repertoire graph, PGN, SRS, sync merge, Maia encoding)
+npm run build        # production build in dist/
 ```
 
-## Online zetten (GitHub Pages)
+## Deploy (GitHub Pages)
 
-De workflow in `.github/workflows/deploy.yml` test en bouwt bij elke push en publiceert de standaard-branch van de
-repo naar GitHub Pages. Eenmalig aanzetten: **Settings → Pages → Build and deployment → Source: GitHub Actions**. De
-app staat dan op `https://<gebruiker>.github.io/<repo>/` (hier: <https://zeddyfree-art.github.io/chess/>). (Op een gratis GitHub-account kan Pages alleen voor publieke repo’s; je
-gegevens staan niet in de repo maar in je browser, dus dat is geen privacyprobleem. Netlify of Cloudflare Pages
-werken ook: build-commando `npm run build`, map `dist`.)
+`.github/workflows/deploy.yml` tests and builds on every push and publishes the repository's default branch to
+GitHub Pages (enable once: **Settings → Pages → Source: GitHub Actions**). Optional repository variable
+`GOOGLE_CLIENT_ID` enables Drive sync (see the setup guide).
 
-## Je gegevens
-
-Alles staat in de browser (IndexedDB) van het apparaat waarop je de app gebruikt: geen account, geen server, geen
-limiet. Daardoor:
-
-- Maak af en toe een **back-up** (Instellingen → Back-up downloaden) en bewaar die bijvoorbeeld in je cloudmap.
-- Wil je dochter op haar eigen tablet trainen? Zet de back-up daar terug, of exporteer alleen haar repertoire als PGN
-  en importeer dat op haar apparaat. (Automatische synchronisatie tussen apparaten staat hieronder bij de ideeën.)
-- **Van Chessbook overstappen**: exporteer je repertoire in Chessbook als PGN en kies bij *Nieuw repertoire* het
-  PGN-bestand. Varianten, commentaar en meerdere hoofdstukken worden samengevoegd.
-
-## Hoe het in elkaar zit
+## How it's built
 
 ```
-src/lib/chess.ts        chessops-helpers: FEN-sleutels (zonder zetentellers → transposities), SAN/UCI, rokade
-src/lib/repertoire.ts   datamodel en pure bewerkingen: toevoegen, verwijderen + opruimen, boom, pad, statistieken
-src/lib/srs.ts          FSRS-kaarten (ts-fsrs), trainingswachtrij in boomvolgorde
-src/lib/pgn.ts          PGN-import met varianten, export als één partij met varianten
-src/lib/lichess.ts      Opening Explorer, cloud-eval, OAuth PKCE, wachtrij + cache
-src/lib/engine.ts       Stockfish-worker (UCI), MultiPV
-src/lib/evaluate.ts     cloud eerst, lokaal als terugval
-src/lib/audit.ts        gatenanalyse (dekking) en engine-controle
-src/lib/store.ts        app-state (zustand), undo/redo, opslag in IndexedDB, back-up
-src/components/         React-schermen: BuildView, TreeView, TrainView, AuditView, HomeView, SettingsView
+src/lib/chess.ts        chessops helpers: position keys (no move counters → transpositions), SAN/UCI, castling
+src/lib/repertoire.ts   data model and pure operations: add, delete + clean up, tree, paths, stats
+src/lib/srs.ts          FSRS cards (ts-fsrs), training queue in tree order
+src/lib/pgn.ts          PGN import with variations, export as one game with variations
+src/lib/lichess.ts      Opening Explorer, cloud eval, Lichess OAuth PKCE, request queue + cache
+src/lib/engine.ts       Stockfish worker (UCI, MultiPV); evaluate.ts: cloud first, local fallback
+src/lib/audit.ts        gap/coverage analysis and engine check
+src/lib/maia*.ts        Maia-3: board/move encoding, ONNX worker, download + cache
+src/lib/opponent.ts     practice opponent: your lines → Lichess database → Maia
+src/lib/drive.ts        Google Identity Services + Drive REST (drive.file)
+src/lib/sync.ts         sync loop, daily backups; merge.ts: merging two devices' data
+src/lib/store.ts        app state (zustand), undo/redo, IndexedDB persistence
+src/components/         React screens: Build, Tree, Train, Play, Check, Overview, Settings
 ```
 
-Keuzes die de rest bepalen:
+## Licence and credits
 
-- **Eén kaart per eigen zet** (stelling waarin jij aan zet bent → jouw zet). Zetten van de tegenstander zijn geen
-  kaarten maar de context waarin je overhoord wordt. Heb je in een stelling meer dan één eigen zet, dan waarschuwt
-  de app; bij trainen is elk ervan goed.
-- **Dekking** = 1 − (kans dat een partij een onvoorbereide zet van de tegenstander tegenkomt vóór je lijn eindigt),
-  waarbij de kans per zet uit de Lichess-database komt. Een lijn die gewoon ophoudt telt niet als gat maar staat apart
-  onder “lijnen die vroeg eindigen”.
-- **FSRS** in plaats van SM-2: modernere planning (ook in Anki), ~90% gewenste onthoudkans.
-
-## Ideeën voor later
-
-- Synchronisatie tussen apparaten (bijv. via een eigen kleine backend of een gedeelde map), zodat ouder en kind elk
-  op hun eigen apparaat werken.
-- Installeerbaar als app en offline te gebruiken (PWA).
-- “Train alleen deze tak” vanuit de boom; importeren direct via een Lichess-studie-URL.
-- Eigen partijen (van Lichess) naast je repertoire leggen: waar week je af, waar week de tegenstander af?
-
-## Licentie
-
-De app gebruikt [chessground](https://github.com/lichess-org/chessground), [chessops](https://github.com/niklasf/chessops)
-en [Stockfish.js](https://github.com/nmrugg/stockfish.js), alle drie GPL-3.0. Voor eigen gebruik maakt dat niets uit;
-wie de app publiceert of verspreidt, verspreidt dat onder GPL-3.0.
+Built on [chessground](https://github.com/lichess-org/chessground) and [chessops](https://github.com/niklasf/chessops)
+(Lichess), [Stockfish.js](https://github.com/nmrugg/stockfish.js), [Maia-3](https://github.com/CSSLab/maia-platform-frontend)
+(CSSLab) — all GPL-3.0 — plus [ONNX Runtime Web](https://onnxruntime.ai) and [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) (MIT).
+Because of the GPL components, the app as a whole is distributed under GPL-3.0.

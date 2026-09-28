@@ -65,7 +65,7 @@ export async function findGaps(
   };
 
   const visit = async (key: string, reach: number, line: string[]) => {
-    if (signal.aborted) throw new DOMException('Afgebroken', 'AbortError');
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     if (expanded.has(key) || line.length >= opts.maxPly || reach < opts.minReach) return;
     expanded.add(key);
     const prepared = movesAt(rep, key);
@@ -157,7 +157,7 @@ export async function engineCheck(
   const issues: EngineIssue[] = [];
   let done = 0;
   for (const { node, line } of items) {
-    if (signal.aborted) throw new DOMException('Afgebroken', 'AbortError');
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     onProgress(done, items.length, [...line, node.san]);
     const before = await evaluate(node.from, { multiPv: 3, localDepth: opts.localDepth });
     const best = before.lines[0];

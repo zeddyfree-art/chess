@@ -7,6 +7,7 @@ import {
   buildTree,
   deleteMove,
   deletionImpact,
+  findPath,
   isMine,
   movesAt,
   reachable,
@@ -227,27 +228,27 @@ export function TreeView() {
   const askPrune = (n: TreeNode) => {
     const impact = deletionImpact(rep, n.from, n.uci);
     setDialog({
-      title: `Tak ${moveNumber(n.ply, true)}${n.san} snoeien?`,
+      title: `Prune branch ${moveNumber(n.ply, true)}${n.san}?`,
       body: (
         <>
-          Dit verwijdert <b>{impact.moves}</b> {impact.moves === 1 ? 'zet' : 'zetten'}
+          This removes <b>{impact.moves}</b> {impact.moves === 1 ? 'move' : 'moves'}
           {impact.cards > 0 && (
             <>
               {' '}
-              en <b>{impact.cards}</b> trainingskaart{impact.cards === 1 ? '' : 'en'}
+              and <b>{impact.cards}</b> training card{impact.cards === 1 ? '' : 's'}
             </>
           )}
-          . Stellingen die je via een andere zetvolgorde bereikt blijven bewaard.
+          . Positions you also reach through another move order are kept.
         </>
       ),
       choices: [
         {
-          label: 'Snoeien',
+          label: 'Prune',
           kind: 'danger',
           run: () => {
-            updateRep(rep.id, (r) => deleteMove(r, n.from, n.uci), `tak ${n.san} gesnoeid`);
+            updateRep(rep.id, (r) => deleteMove(r, n.from, n.uci), `pruned branch ${n.san}`);
             setSelected(null);
-            showToast(`Tak gesnoeid (${impact.moves} zetten)`, { label: 'Ongedaan maken', run: undoLast });
+            showToast(`Branch pruned (${impact.moves} moves)`, { label: 'Undo', run: undoLast });
           },
         },
       ],
@@ -275,7 +276,7 @@ export function TreeView() {
     <div className="tree-layout">
       <div className="card" style={{ overflow: 'hidden' }}>
         <div className="tree-toolbar">
-          <span className="muted small">Open tot zet</span>
+          <span className="muted small">Open to move</span>
           <button className="btn sm icon" onClick={() => (setDepth((d) => Math.max(2, d - 2)), setToggled(new Set()))}>
             −
           </button>
@@ -285,21 +286,21 @@ export function TreeView() {
           <button className="btn sm icon" onClick={() => (setDepth((d) => d + 2), setToggled(new Set()))}>
             +
           </button>
-          <button className="btn sm ghost" onClick={() => (setDepth(200), setToggled(new Set()))} title="Alles uitklappen">
-            <Icon name="expand" size={14} /> alles
+          <button className="btn sm ghost" onClick={() => (setDepth(200), setToggled(new Set()))} title="Expand all">
+            <Icon name="expand" size={14} /> all
           </button>
-          <button className="btn sm ghost" onClick={() => setToggled(new Set(allIds().filter((id) => byId.get(id)!.ply < depth - 1)))} title="Alles inklappen">
-            <Icon name="collapse" size={14} /> inklappen
+          <button className="btn sm ghost" onClick={() => setToggled(new Set(allIds().filter((id) => byId.get(id)!.ply < depth - 1)))} title="Collapse all">
+            <Icon name="collapse" size={14} /> collapse
           </button>
           <span className="spacer" />
           <select className="input" style={{ height: 28 }} value={highlight} onChange={(e) => setHighlight(e.target.value as Highlight)}>
-            <option value="none">Markeer…</option>
-            <option value="due">Te herhalen</option>
-            <option value="flags">Engine-twijfels (?!, ?, ??)</option>
-            <option value="rare">Zeldzame zetten (&lt;2%)</option>
+            <option value="none">Highlight…</option>
+            <option value="due">Due for review</option>
+            <option value="flags">Engine doubts (?!, ?, ??)</option>
+            <option value="rare">Rare moves (&lt;2%)</option>
           </select>
           <label className="row small" style={{ gap: 4 }}>
-            <input type="checkbox" checked={showGaps} onChange={(e) => setShowGaps(e.target.checked)} /> gaten
+            <input type="checkbox" checked={showGaps} onChange={(e) => setShowGaps(e.target.checked)} /> gaps
           </label>
           <button className="btn sm icon" onClick={() => setZoom((z) => Math.max(0.4, z - 0.15))} title="Uitzoomen">
             −
@@ -326,7 +327,7 @@ export function TreeView() {
         >
           {tree.length === 0 ? (
             <div className="empty" style={{ margin: 24 }}>
-              Dit repertoire is nog leeg. Voeg zetten toe via <b>Bouwen</b> of importeer een PGN.
+              This repertoire is still empty. Add moves in <b>Build</b> or import a PGN.
             </div>
           ) : (
             <svg
@@ -349,7 +350,7 @@ export function TreeView() {
                         goToKey(parentKey);
                       }}
                     >
-                      <title>{`Niet voorbereid: ${ln.ghost.san} (${formatPct(ln.ghost.share)} van de partijen). Klik om te openen.`}</title>
+                      <title>{`Not prepared: ${ln.ghost.san} (${formatPct(ln.ghost.share)} of games). Click to open.`}</title>
                       <rect width={ln.w} height={BOX_H} rx={6} />
                       <text x={8} y={15}>
                         {ln.label} <tspan className="size-label">{formatPct(ln.ghost.share)}</tspan>
@@ -430,35 +431,35 @@ export function TreeView() {
               <NodeDetails rep={rep} node={selectedNode} profile={profile} onOpen={() => goToKey(selectedNode.to)} onPrune={() => askPrune(selectedNode)} />
             ) : (
               <div className="help">
-                Klik op een zet om hem te selecteren; dubbelklik om hem op het bouwbord te openen. Beweeg over de boom om stellingen
-                te bekijken. Geselecteerde tak snoeien: <span className="kbd">Delete</span>.
+                Click a move to select it; double-click to open it on the build board. Hover over the tree to preview positions.
+                Prune the selected branch with <span className="kbd">Delete</span>.
               </div>
             )}
           </div>
         </div>
         <div className="card card-pad stack" style={{ gap: 8 }}>
-          <h3>Legenda</h3>
+          <h3>Legend</h3>
           <div className="legend" style={{ flexDirection: 'column', gap: 6 }}>
             <span>
               <i style={{ background: 'var(--mine-soft)', border: '1.5px solid var(--mine)' }} />
-              Jouw zet (trainingskaart)
+              Your move (a training card)
             </span>
             <span>
               <i style={{ background: 'var(--surface)', border: '1.5px solid var(--opp)' }} />
-              Zet van de tegenstander · % = hoe vaak gespeeld
+              Opponent move · % = how often it is played
             </span>
             <span>
               <i style={{ background: 'var(--gap-soft)', border: '1.5px dashed var(--gap)' }} />
-              Gat: vaak gespeeld, niet voorbereid
+              Gap: played often, not prepared
             </span>
             <span>
-              <i style={{ border: '1.5px dashed var(--faint)' }} />↪ Transpositie (vervolg staat elders)
+              <i style={{ border: '1.5px dashed var(--faint)' }} />↪ Transposition (continued elsewhere)
             </span>
             <span>
               <i style={{ background: 'var(--due)', borderRadius: '50%' }} />
-              Te herhalen
+              Due for review
             </span>
-            <span>Dikte van een lijn = populariteit (uit de Lichess-database)</span>
+            <span>Line thickness = popularity (Lichess database)</span>
           </div>
         </div>
       </div>
@@ -534,31 +535,38 @@ function NodeDetails({
   const share = node.mine ? undefined : shareOf(explorerFor(profile, node.from), node.san);
   const flag = rep.engine[node.id];
   const comment = movesAt(rep, node.from).find((m) => m.uci === node.uci)?.comment;
+  const { trainFrom, playFrom } = useApp.getState();
 
   return (
     <>
       <div style={{ fontWeight: 600 }}>{formatLine(path)}</div>
       <div className="row wrap">
-        <span className={`badge ${isMine(rep, node.from) ? 'mine' : 'opp'}`}>{isMine(rep, node.from) ? 'jouw zet' : 'tegenstander'}</span>
-        <span className="badge">{node.size} zetten in deze tak</span>
-        <span className="badge">{node.leaves} eindposities</span>
-        {cards > 0 && <span className="badge accent">{cards} kaarten</span>}
-        {due > 0 && <span className="badge due">{due} te herhalen</span>}
-        {share !== undefined && <span className="badge">{formatPct(share)} gespeeld</span>}
+        <span className={`badge ${isMine(rep, node.from) ? 'mine' : 'opp'}`}>{isMine(rep, node.from) ? 'your move' : 'opponent'}</span>
+        <span className="badge">{node.size} moves in branch</span>
+        <span className="badge">{node.leaves} line ends</span>
+        {cards > 0 && <span className="badge accent">{cards} cards</span>}
+        {due > 0 && <span className="badge due">{due} due</span>}
+        {share !== undefined && <span className="badge">{formatPct(share)} played</span>}
         {flag && lossLabel(flag.loss).tone !== 'ok' && (
           <span className="badge gap">
-            −{(flag.loss / 100).toFixed(1)} · beter {flag.bestSan}
+            −{(flag.loss / 100).toFixed(1)} · better {flag.bestSan}
           </span>
         )}
-        {node.transposition && <span className="badge">transpositie</span>}
+        {node.transposition && <span className="badge">transposition</span>}
       </div>
       {comment && <div className="small muted">{comment}</div>}
       <div className="row wrap">
         <button className="btn primary" onClick={onOpen}>
-          <Icon name="board" size={16} /> Open op bord
+          <Icon name="board" size={16} /> Open on board
+        </button>
+        <button className="btn" onClick={() => trainFrom(node.to)} title="Train the branch that starts here">
+          <Icon name="train" size={16} /> Train from here
+        </button>
+        <button className="btn" onClick={() => playFrom(findPath(rep, node.to) ?? [])} title="Play a practice game from this position">
+          <Icon name="play" size={16} /> Play from here
         </button>
         <button className="btn danger" onClick={onPrune}>
-          <Icon name="scissors" size={16} /> Snoei tak
+          <Icon name="scissors" size={16} /> Prune branch
         </button>
       </div>
     </>

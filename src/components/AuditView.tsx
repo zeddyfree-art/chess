@@ -54,7 +54,7 @@ export function AuditView() {
     setEngRun({ done: 0, total: 0, line: [] });
     try {
       const { flags, issues } = await engineCheck(rep, engOpts, (done, total, line) => setEngRun({ done, total, line }), ctrl.signal);
-      updateRep(rep.id, (r) => ({ ...r, engine: { ...r.engine, ...flags } }), 'engine-controle', { undoable: false });
+      updateRep(rep.id, (r) => ({ ...r, engine: { ...r.engine, ...flags } }), 'engine check', { undoable: false });
       setIssues(issues);
     } catch (e) {
       if ((e as Error).name !== 'AbortError') setEngError(e as Error);
@@ -74,43 +74,43 @@ export function AuditView() {
         <div className="section stack" style={{ gap: 8 }}>
           <div className="row">
             <Icon name="target" />
-            <h2>Gaten in je voorbereiding</h2>
+            <h2>Gaps in your preparation</h2>
           </div>
           <div className="help">
-            Loopt je repertoire af en vergelijkt elke stelling waarin de tegenstander aan zet is met wat er echt gespeeld wordt
-            in de Lichess-database (filters van <b>{profile.name}</b>). Zo zie je welke antwoorden je nog mist, gesorteerd op
-            hoe vaak je ze gaat tegenkomen.
+            Walks through your repertoire and compares every position where the opponent is to move with what is actually
+            played in the Lichess database (filters of <b>{profile.name}</b>). You see which replies you are still missing,
+            sorted by how often you will meet them.
           </div>
           <div className="row wrap">
-            <span className="muted small">Negeer wat voorkomt in minder dan</span>
+            <span className="muted small">Ignore what occurs in less than</span>
             {[0.005, 0.01, 0.02, 0.05].map((v) => (
               <span key={v} className={`chip ${gapOpts.minReach === v ? 'on' : ''}`} onClick={() => setGapOpts((o) => ({ ...o, minReach: v }))}>
                 {formatPct(v)}
               </span>
             ))}
-            <span className="muted small">van je partijen</span>
+            <span className="muted small">of your games</span>
           </div>
           <div className="row">
             {gapRun ? (
               <>
                 <button className="btn" onClick={stop}>
-                  Stoppen
+                  Stop
                 </button>
                 <span className="small muted">
-                  {gapRun.done} stellingen bekeken… {formatLine(gapRun.line.slice(-6), Math.max(0, gapRun.line.length - 6))}
+                  {gapRun.done} positions checked… {formatLine(gapRun.line.slice(-6), Math.max(0, gapRun.line.length - 6))}
                 </span>
               </>
             ) : (
               <button className="btn primary" onClick={runGaps}>
-                Zoek gaten
+                Find gaps
               </button>
             )}
           </div>
           {!getToken() && (
             <div className="notice small">
-              Hiervoor moet je Lichess-account gekoppeld zijn.{' '}
+              This needs your Lichess account to be connected.{' '}
               <button className="btn sm" onClick={() => startLogin()}>
-                Inloggen met Lichess
+                Log in with Lichess
               </button>
             </div>
           )}
@@ -119,7 +119,7 @@ export function AuditView() {
               {gapError.message}{' '}
               {gapError instanceof AuthRequiredError && (
                 <button className="btn sm" onClick={() => setView('settings')}>
-                  Instellingen
+                  Settings
                 </button>
               )}
             </div>
@@ -131,7 +131,7 @@ export function AuditView() {
               <div className="coverage-ring">
                 <span className="big-count">{Math.round(gaps.coverage * 100)}%</span>
                 <span className="muted">
-                  van je partijen blijft binnen je voorbereiding tot je lijnen eindigen · {gaps.positions} stellingen bekeken
+                  of your games stay inside your preparation until your lines end · {gaps.positions} positions checked
                 </span>
               </div>
               <div className="progress" style={{ marginTop: 8 }}>
@@ -139,23 +139,23 @@ export function AuditView() {
               </div>
             </div>
             <div className="section">
-              <h3 style={{ marginBottom: 6 }}>Ontbrekende antwoorden ({gaps.gaps.length})</h3>
-              {gaps.gaps.length === 0 && <div className="empty">Geen gaten boven de drempel. Mooi!</div>}
+              <h3 style={{ marginBottom: 6 }}>Missing replies ({gaps.gaps.length})</h3>
+              {gaps.gaps.length === 0 && <div className="empty">No gaps above the threshold. Nice!</div>}
               <div className="result-list">
                 {gaps.gaps.map((g, i) => (
-                  <div key={i} className="result-item" onClick={() => goToSans(g.line)} title="Open deze stelling om een antwoord toe te voegen">
+                  <div key={i} className="result-item" onClick={() => goToSans(g.line)} title="Open this position to add a reply">
                     <span className="badge gap num">{formatPct(g.reach)}</span>
                     <LineWithLast line={g.line} last={g.san} />
-                    <span className="faint small num">{formatPct(g.share)} hier</span>
+                    <span className="faint small num">{formatPct(g.share)} here</span>
                   </div>
                 ))}
               </div>
             </div>
             {gaps.lineEnds.length > 0 && (
               <div className="section">
-                <h3 style={{ marginBottom: 6 }}>Lijnen die vroeg eindigen</h3>
+                <h3 style={{ marginBottom: 6 }}>Lines that end early</h3>
                 <div className="help" style={{ marginBottom: 6 }}>
-                  Hier stopt je voorbereiding terwijl er nog veel partijen zijn. Niet erg, maar misschien wil je verder.
+                  Your preparation stops here while many games continue. Not a problem, but you may want to go further.
                 </div>
                 <div className="result-list">
                   {gaps.lineEnds.slice(0, 15).map((g, i) => (
@@ -178,23 +178,23 @@ export function AuditView() {
         <div className="section stack" style={{ gap: 8 }}>
           <div className="row">
             <Icon name="audit" />
-            <h2>Engine-controle</h2>
+            <h2>Engine check</h2>
           </div>
           <div className="help">
-            Controleert elke zet die jíj speelt. Eerst met de Lichess cloud-evaluatie (diep en snel); ontbreekt die, dan rekent
-            Stockfish 19 in je browser. Zetten die duidelijk slechter zijn dan de beste zet worden gemarkeerd (?!, ?, ??) — ook
-            in de boom.
+            Checks every move <i>you</i> play. First with the Lichess cloud evaluation (deep and fast); where there is none,
+            Stockfish 19 runs in your browser. Moves clearly worse than the best move are marked (?!, ?, ??) — in the tree
+            too.
           </div>
           <div className="row wrap">
-            <span className="muted small">Markeer vanaf</span>
+            <span className="muted small">Flag from</span>
             {[30, 50, 100].map((v) => (
               <span key={v} className={`chip ${engOpts.threshold === v ? 'on' : ''}`} onClick={() => setEngOpts((o) => ({ ...o, threshold: v }))}>
-                {(v / 100).toFixed(1)} pion
+                {(v / 100).toFixed(1)} pawn
               </span>
             ))}
           </div>
           <div className="row wrap">
-            <span className="muted small">Lokale diepte</span>
+            <span className="muted small">Local depth</span>
             {[12, 16, 20].map((v) => (
               <span key={v} className={`chip ${engOpts.localDepth === v ? 'on' : ''}`} onClick={() => setEngOpts((o) => ({ ...o, localDepth: v }))}>
                 {v}
@@ -205,7 +205,7 @@ export function AuditView() {
             {engRun ? (
               <>
                 <button className="btn" onClick={stop}>
-                  Stoppen
+                  Stop
                 </button>
                 <span className="small muted num">
                   {engRun.done}/{engRun.total} · {formatLine(engRun.line.slice(-4), Math.max(0, engRun.line.length - 4))}
@@ -213,7 +213,7 @@ export function AuditView() {
               </>
             ) : (
               <button className="btn primary" onClick={runEngine}>
-                Controleer mijn zetten
+                Check my moves
               </button>
             )}
           </div>
@@ -225,15 +225,15 @@ export function AuditView() {
           {engError && <div className="notice error">{engError.message}</div>}
           {!issues && storedIssues > 0 && (
             <div className="help">
-              Een eerdere controle vond {storedIssues} twijfelachtige {storedIssues === 1 ? 'zet' : 'zetten'} (zie de boom, markeer
-              “Engine-twijfels”).
+              An earlier check found {storedIssues} dubious {storedIssues === 1 ? 'move' : 'moves'} (see the tree, highlight
+              “Engine doubts”).
             </div>
           )}
         </div>
         {issues && (
           <div className="section">
-            <h3 style={{ marginBottom: 6 }}>Twijfelachtige zetten ({issues.length})</h3>
-            {issues.length === 0 && <div className="empty">Alle zetten binnen de marge. 👍</div>}
+            <h3 style={{ marginBottom: 6 }}>Dubious moves ({issues.length})</h3>
+            {issues.length === 0 && <div className="empty">All moves within the margin. 👍</div>}
             <div className="result-list">
               {issues.map((it) => {
                 const l = lossLabel(it.flag.loss);
@@ -242,7 +242,7 @@ export function AuditView() {
                     <span className="badge gap num">−{(it.flag.loss / 100).toFixed(1)}</span>
                     <LineWithLast line={it.line} last={it.san} suffix={l.symbol} />
                     <span className="small">
-                      beter: <b>{it.flag.bestSan}</b>
+                      better: <b>{it.flag.bestSan}</b>
                     </span>
                   </div>
                 );

@@ -1263,3 +1263,8 @@ a {
     height: 60vh;
   }
 }
+
+a.btn {
+  text-decoration: none;
+  color: inherit;
+}
