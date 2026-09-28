@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages: ${{ steps.pages.outputs.enabled }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,14 +28,27 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      # Skip publishing (instead of failing) while GitHub Pages is not switched on yet.
+      - id: pages
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/pages" --silent; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages staat nog uit: Settings → Pages → Source: GitHub Actions, en draai deze workflow daarna opnieuw."
+          fi
+      - if: steps.pages.outputs.enabled == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
-    # Only main is published. Enable once: Settings → Pages → Source: "GitHub Actions".
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # Only the repository's default branch is published.
+    # Enable once: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+    if: needs.build.outputs.pages == 'true'
     needs: build
     runs-on: ubuntu-latest
     environment:

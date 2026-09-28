@@ -59,9 +59,9 @@ npm run build   # productiebuild in dist/
 
 ## Online zetten (GitHub Pages)
 
-De workflow in `.github/workflows/deploy.yml` test en bouwt bij elke push en publiceert `main` naar GitHub Pages.
-Eenmalig aanzetten: **Settings → Pages → Source: GitHub Actions**. De app staat dan op
-`https://<gebruiker>.github.io/<repo>/`. (Op een gratis GitHub-account kan Pages alleen voor publieke repo’s; je
+De workflow in `.github/workflows/deploy.yml` test en bouwt bij elke push en publiceert de standaard-branch van de
+repo naar GitHub Pages. Eenmalig aanzetten: **Settings → Pages → Build and deployment → Source: GitHub Actions**. De
+app staat dan op `https://<gebruiker>.github.io/<repo>/` (hier: <https://zeddyfree-art.github.io/chess/>). (Op een gratis GitHub-account kan Pages alleen voor publieke repo’s; je
 gegevens staan niet in de repo maar in je browser, dus dat is geen privacyprobleem. Netlify of Cloudflare Pages
 werken ook: build-commando `npm run build`, map `dist`.)
 
