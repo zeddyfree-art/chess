@@ -16,9 +16,10 @@ import {
   type Repertoire,
   type TreeNode,
 } from '../lib/repertoire';
+import { tokensToShapes } from '../lib/shapes';
 import { State } from '../lib/srs';
 import { activeProfile, activeRep, useApp, type Profile } from '../lib/store';
-import { Board } from './Board';
+import { Board, type Shape } from './Board';
 import { GAP_SHARE } from './BuildView';
 import { ChoiceDialog, type Choice } from './Dialog';
 import { formatPct } from './ExplorerPanel';
@@ -224,6 +225,8 @@ export function TreeView() {
   };
 
   const focus = byId.get(hovered ?? '') ?? byId.get(selected ?? '') ?? null;
+  const focusShapes = rep.shapes?.[focus ? focus.to : ROOT];
+  const drawn = useMemo(() => tokensToShapes(focusShapes) as Shape[], [focusShapes]);
   const selectedNode = byId.get(selected ?? '') ?? null;
 
   const askPrune = (n: TreeNode) => {
@@ -425,6 +428,7 @@ export function TreeView() {
               orientation={rep.side}
               movable={null}
               lastMove={focus ? uciToArrow(focus.uci) : null}
+              drawn={drawn}
             />
           </div>
           <div className="section stack" style={{ gap: 10 }}>
@@ -559,7 +563,7 @@ function NodeDetails({
         )}
         {node.transposition && <span className="badge">transposition</span>}
       </div>
-      {comment && <div className="small muted">{comment}</div>}
+      {comment && <div className="comment-text small muted">{comment}</div>}
       <div className="row wrap">
         <button className="btn primary" onClick={onOpen}>
           <Icon name="board" size={16} /> Open on board

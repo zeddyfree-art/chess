@@ -43,6 +43,9 @@ interface UndoEntry {
   repId: string;
   before: Repertoire;
   label: string;
+  /** Edits with the same key in a row share one undo step (e.g. several arrows drawn on one position). */
+  coalesce?: string;
+  at?: number;
 }
 
 export interface AppState {
@@ -72,7 +75,7 @@ export interface AppState {
   /** Undoes a deletion: puts the repertoire back and lifts its deletion mark so sync keeps it. */
   restoreRepertoire(rep: Repertoire): void;
   renameRepertoire(id: string, name: string): void;
-  updateRep(repId: string, fn: (rep: Repertoire) => Repertoire, label: string, opts?: { undoable?: boolean }): void;
+  updateRep(repId: string, fn: (rep: Repertoire) => Repertoire, label: string, opts?: { undoable?: boolean; coalesce?: string }): void;
   undoLast(): void;
   redoLast(): void;
   replaceData(data: AppData): void;
@@ -221,7 +224,14 @@ export const useApp = create<AppState>()((set, get) => {
       if (changed === before) return;
       const after = { ...changed, updatedAt: Date.now() };
       mapRep(repId, () => after);
-      if (opts?.undoable !== false) set((s) => ({ undo: [...s.undo.slice(-49), { repId, before, label }], redo: [] }));
+      if (opts?.undoable === false) return;
+      set((s) => {
+        const top = s.undo.at(-1);
+        const now = Date.now();
+        const join = !!opts?.coalesce && top?.repId === repId && top.coalesce === opts.coalesce && now - (top.at ?? 0) < 8000;
+        if (join && top) return { undo: [...s.undo.slice(0, -1), { ...top, at: now }], redo: [] };
+        return { undo: [...s.undo.slice(-49), { repId, before, label, coalesce: opts?.coalesce, at: now }], redo: [] };
+      });
     },
 
     undoLast: () => {

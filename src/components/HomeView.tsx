@@ -8,6 +8,7 @@ import { activeProfile, useApp } from '../lib/store';
 import { useSync } from '../lib/sync';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
+import { ImportPgnDialog } from './ImportPgnDialog';
 
 export function HomeView() {
   const data = useApp((s) => s.data);
@@ -15,6 +16,7 @@ export function HomeView() {
   const { setActiveRep, setView } = useApp.getState();
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Repertoire | null>(null);
+  const [importingId, setImportingId] = useState<string | null>(null);
   const reps = data.repertoires.filter((r) => r.profileId === data.activeProfileId);
 
   const summaries = useMemo(() => reps.map((r) => ({ rep: r, stats: stats(r), srs: counts(r) })), [reps]);
@@ -68,6 +70,14 @@ export function HomeView() {
                   onClick={() => downloadRepertoire(rep)}
                 >
                   <Icon name="download" size={15} />
+                </button>
+                <button
+                  className="btn sm icon ghost"
+                  title="Add lines from a PGN (paste or file)"
+                  aria-label={`Add lines to ${rep.name} from a PGN`}
+                  onClick={() => setImportingId(rep.id)}
+                >
+                  <Icon name="upload" size={15} />
                 </button>
                 <button
                   className="btn sm icon ghost danger"
@@ -144,6 +154,9 @@ export function HomeView() {
 
       {creating && <NewRepertoireDialog onClose={() => setCreating(false)} />}
       {deleting && <DeleteRepertoireDialog rep={deleting} onClose={() => setDeleting(null)} />}
+      {importingId && reps.find((r) => r.id === importingId) && (
+        <ImportPgnDialog rep={reps.find((r) => r.id === importingId)!} onClose={() => setImportingId(null)} />
+      )}
     </div>
   );
 }
@@ -260,7 +273,9 @@ export function NewRepertoireDialog({ onClose }: { onClose: () => void }) {
           onChange={(e) => setPgn(e.target.value)}
         />
         <input type="file" accept=".pgn,text/plain" onChange={(e) => readFile(e.target.files?.[0])} />
-        <div className="help">Multiple games/chapters are merged; transpositions are detected automatically.</div>
+        <div className="help">
+          Multiple games/chapters are merged; transpositions are detected automatically. Comments and arrows/circles are kept.
+        </div>
       </div>
       {errors.length > 0 && <div className="notice error small">{errors.slice(0, 4).join(' · ')}</div>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>

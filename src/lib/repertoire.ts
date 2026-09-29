@@ -40,6 +40,8 @@ export interface Repertoire {
   side: Side;
   positions: Record<string, RepMove[]>;
   notes: Record<string, string>;
+  /** Arrows and circles per position, as PGN tokens ("Gc3b5", "Rc7"; see shapes.ts). Absent in older data. */
+  shapes?: Record<string, string[]>;
   cards: Record<string, SrsCard>;
   engine: Record<string, EngineFlag>;
   createdAt: number;
@@ -108,6 +110,16 @@ export function setNote(rep: Repertoire, key: string, note: string): Repertoire 
   return { ...rep, notes, updatedAt: Date.now() };
 }
 
+/** Sets the arrows and circles shown on a position; an empty list removes them. */
+export function setShapes(rep: Repertoire, key: string, tokens: readonly string[]): Repertoire {
+  const current = rep.shapes?.[key] ?? [];
+  if (current.length === tokens.length && current.every((t, i) => t === tokens[i])) return rep;
+  const shapes = { ...rep.shapes };
+  if (tokens.length) shapes[key] = [...tokens];
+  else delete shapes[key];
+  return { ...rep, shapes, updatedAt: Date.now() };
+}
+
 /** Moves a move to the front of the list (first = main line in PGN export and trees). */
 export function promoteMove(rep: Repertoire, from: string, uci: string): Repertoire {
   const moves = movesAt(rep, from);
@@ -147,7 +159,9 @@ export function garbageCollect(rep: Repertoire): Repertoire {
   const cards = Object.fromEntries(Object.entries(rep.cards).filter(([id]) => liveEdge(id)));
   const engine = Object.fromEntries(Object.entries(rep.engine).filter(([id]) => liveEdge(id)));
   const notes = Object.fromEntries(Object.entries(rep.notes).filter(([k]) => live.has(k)));
-  return { ...rep, positions, cards, engine, notes };
+  if (!rep.shapes) return { ...rep, positions, cards, engine, notes };
+  const shapes = Object.fromEntries(Object.entries(rep.shapes).filter(([k]) => live.has(k)));
+  return { ...rep, positions, cards, engine, notes, shapes };
 }
 
 function withoutEdge(rep: Repertoire, from: string, uci: string): Repertoire {

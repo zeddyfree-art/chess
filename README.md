@@ -23,8 +23,8 @@ Live: <https://zeddyfree-art.github.io/chess/> · [Privacy Policy](https://zeddy
 
 | Screen | What you do there |
 | --- | --- |
-| **Overview** | The active player's repertoires with their size and what is due today. Sizes are counted like books and PGN do: one **move** is White's move plus Black's reply (1.e4 e5 is one move); hover a number for the half-moves, your own moves and line lengths. Each card has **Download** (PGN) and **Delete** (with confirmation and an Undo). |
-| **Build** | Board plus the current line. Moves you play are a *proposal* (dashed blue) until you **Save** (Enter) or **Discard** (Esc). Next to it: your prepared moves in this position (with number of follow-up moves, comments, ★ main move, delete), a note per position, and tabs **Lichess games**, **Masters** and **Engine**. **Train from here** and **Play from here** start from the position on the board. |
+| **Overview** | The active player's repertoires with their size and what is due today. Sizes are counted like books and PGN do: one **move** is White's move plus Black's reply (1.e4 e5 is one move); hover a number for the half-moves, your own moves and line lengths. Each card has **Download** (PGN), **Add lines from a PGN** (paste or file) and **Delete** (with confirmation and an Undo). |
+| **Build** | Board plus the current line. Moves you play are a *proposal* (dashed blue) until you **Save** (Enter) or **Discard** (Esc). Next to it: your prepared moves in this position (with number of follow-up moves, comments, ★ main move, delete), a note per position, and tabs **Lichess games**, **Masters** and **Engine**. **Train from here** and **Play from here** start from the position on the board. Imported comments and arrows/circles show here; you can draw your own (see below). |
 | **Tree** | The whole repertoire as a diagram. Green = your move, outlined = opponent move with how often it is played; line thickness = popularity; red dashed nodes = **gaps** (played often, not prepared). Collapse/expand per branch or to a depth, highlight due / dubious / rare moves. Select a node to open it, train or play from it, or **Prune branch** (Delete) — you see beforehand how many moves and cards disappear, and everything can be undone (Ctrl+Z). |
 | **Train** | FSRS spaced repetition: each move you play is a card. New moves are shown first and quizzed again later in the session. **Practice lines** plays random lines through without affecting the schedule. Scoped to one branch when started with *Train from here* (review, drill the whole branch, or practice lines). |
 | **Play** | Practice games against **Maia-3**, a human-like neural network, at any strength from 600 to 2600. In the opening it plays what people at that level actually play (Lichess database) or sticks to your prepared lines; afterwards it plays like a human of that rating. Tells you when you (or it) leave your repertoire; take back, copy PGN, analyse on Lichess, or open the game in Build to add moves. |
@@ -56,8 +56,35 @@ latest edit wins and training progress is merged per card; deletions are remembe
 
 The site owner has to create a Google OAuth client ID once: see [docs/google-drive-setup.md](docs/google-drive-setup.md).
 
-Switching from Chessbook: export your repertoire as PGN there and choose it under *New repertoire*. Variations,
-comments and multiple chapters are merged.
+Switching from Chessbook, Chessable or a Lichess study: export your repertoire as PGN there and choose it under
+*New repertoire*. Variations, comments, arrows/circles and multiple chapters are merged.
+
+## PGN import, comments, arrows and circles
+
+**Adding lines to a repertoire you already have.** Use the upload icon on the repertoire's card in the Overview, *Add PGN*
+in Build, or *Add PGN…* in Settings. Paste text, use *Paste from clipboard*, choose a file or drop one on the window. Before
+anything is added you see what the file contains: new moves, new comments, arrows and circles, and how much is already there.
+Moves you already have are kept; comments and drawings are filled in only where they are missing. If the file has a
+different move of *yours* in a position where you already play something, choose **Keep both** (either counts as correct in
+training) or **Keep only my move**. One **Undo** takes the whole import back. A book with hundreds of chapters (2 MB, 5,800 moves)
+is read in a couple of seconds.
+
+**Arrows and circles.** Lichess studies, Chessable and ChessBase write them into move comments as `[%cal Gc3b5,Rf4f7]` (arrows)
+and `[%csl Rc7]` (circles), with the colours G/R/B/Y. The app reads them, shows them and writes them back on export:
+
+- in **Build** on the board, and the comment of the move that led to the position is shown above the moves (that is where
+  a book explains the position you are looking at); the eye button hides or shows the drawings, ✕ clears them;
+- in **Tree** for the selected or hovered move, and in **Train** while a new move is being taught (not during review, so
+  they do not give the answer away).
+
+**Draw your own, like on Lichess.** Right-click and drag on the Build board for an arrow, right-click a square for a circle;
+Shift or Ctrl gives red, Alt gives blue, both give yellow; drawing the same thing again removes it. Drawings belong to the
+position, so they follow transpositions, are saved and synced like everything else, are undoable (Ctrl+Z) and are exported to
+PGN. A click on the board never wipes them. (There is no drawing on touch screens yet; imported drawings show everywhere.)
+
+**What is not imported.** Chessable's setup chapters that use a pass move (`1. d4 -- 2. Nc3 --`, the opponent "does nothing") cannot
+be represented in a repertoire of real games; the app tells you how many lines were cut at a pass. Clock and evaluation
+annotations, Chessable's internal `[%mdl …]` codes and chess variants are ignored.
 
 ## The Lichess database
 
@@ -104,7 +131,8 @@ GitHub Pages (enable once: **Settings → Pages → Source: GitHub Actions**). O
 src/lib/chess.ts        chessops helpers: position keys (no move counters → transpositions), SAN/UCI, castling
 src/lib/repertoire.ts   data model and pure operations: add, delete + clean up, tree, paths, stats
 src/lib/srs.ts          FSRS cards (ts-fsrs), training queue in tree order
-src/lib/pgn.ts          PGN import with variations, export as one game with variations
+src/lib/pgn.ts          PGN import (into an existing repertoire, with comments and drawings) and export
+src/lib/shapes.ts       arrows and circles as PGN tokens ("Gc3b5"), conversions to chessground and chessops
 src/lib/lichess.ts      Opening Explorer, cloud eval, Lichess OAuth PKCE, request queue + cache
 src/lib/engine.ts       Stockfish worker (UCI, MultiPV); evaluate.ts: cloud first, local fallback
 src/lib/audit.ts        gap/coverage analysis and engine check

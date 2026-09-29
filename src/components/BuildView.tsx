@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { moveFromBoard, moveNumber, playSan, uciToArrow, type PlayedMove, type Side } from '../lib/chess';
 import { lossLabel } from '../lib/audit';
 import { useEvaluation, useExplorer, useKey } from '../lib/hooks';
@@ -16,17 +16,20 @@ import {
   ROOT,
   setMoveComment,
   setNote,
+  setShapes,
   toMoves,
   type Repertoire,
   type RepMove,
 } from '../lib/repertoire';
 import { State } from '../lib/srs';
+import { shapesToTokens, tokensToShapes } from '../lib/shapes';
 import { activeProfile, activeRep, useApp } from '../lib/store';
 import { Board, type Shape } from './Board';
 import { ChoiceDialog, type Choice } from './Dialog';
 import { EnginePanel, EvalBar } from './EnginePanel';
 import { ExplorerPanel } from './ExplorerPanel';
 import { Icon } from './Icon';
+import { ImportPgnDialog } from './ImportPgnDialog';
 
 type Tab = 'lichess' | 'masters' | 'engine';
 
@@ -67,7 +70,12 @@ export function BuildView() {
   const [hover, setHover] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ title: string; body: React.ReactNode; choices: Choice[] } | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [showDrawings, setShowDrawings] = useState<boolean>(() => readPref('show-drawings', true));
 
+  useEffect(() => {
+    writePref('show-drawings', showDrawings);
+  }, [showDrawings]);
   useEffect(() => {
     writePref('build-tab', tab);
   }, [tab]);
@@ -92,6 +100,19 @@ export function BuildView() {
   const inRepertoire = unsaved === 0 && (key === ROOT || movesAt(rep, key).length > 0 || current.length > 0);
 
   const lastMove = useMemo(() => (ply ? uciToArrow(line[ply - 1].uci) : null), [line, ply]);
+
+  // Arrows and circles of this position (from PGN comments, or drawn here with the right mouse button).
+  const stored = rep.shapes?.[key];
+  const drawn = useMemo(() => (showDrawings ? (tokensToShapes(stored) as Shape[]) : undefined), [stored, showDrawings]);
+  const onDraw = (all: Shape[]) => {
+    setShowDrawings(true);
+    updateRep(rep.id, (r) => setShapes(r, key, shapesToTokens(all)), 'drawing', { coalesce: `shapes:${key}` });
+  };
+  const clearDrawings = () => {
+    updateRep(rep.id, (r) => setShapes(r, key, []), 'clear drawings');
+    showToast('Drawings cleared', { label: 'Undo', run: undoLast });
+  };
+  const arrival = ply > 0 ? line[ply - 1] : null;
 
   const shapes = useMemo<Shape[]>(() => {
     const s: Shape[] = repMoves.map((m) => {
@@ -226,7 +247,7 @@ export function BuildView() {
       <div>
         <div className="board-area">
           {engineOn && <EvalBar evaluation={evaluation} flipped={orientation === 'black'} />}
-          <Board position={key} orientation={orientation} movable="both" lastMove={lastMove} shapes={shapes} onMove={onBoardMove} />
+          <Board position={key} orientation={orientation} movable="both" lastMove={lastMove} shapes={shapes} drawn={drawn} onDraw={onDraw} onMove={onBoardMove} />
         </div>
         <div className="board-controls">
           <button className="btn icon" onClick={() => setPly(0)} title="Start (Home)">
@@ -252,6 +273,20 @@ export function BuildView() {
               prepared reply
             </span>
           </span>
+          <button
+            className="btn icon"
+            aria-pressed={showDrawings}
+            onClick={() => setShowDrawings((v) => !v)}
+            title={showDrawings ? 'Hide arrows and circles' : 'Show arrows and circles'}
+          >
+            <Icon name="eye" />
+            {!!stored?.length && <span className="pip">{stored.length}</span>}
+          </button>
+          {!!stored?.length && showDrawings && (
+            <button className="btn icon" onClick={clearDrawings} title="Clear the arrows and circles on this position">
+              <Icon name="x" />
+            </button>
+          )}
           <button className="btn icon" onClick={() => setOrientation((o) => (o === 'white' ? 'black' : 'white'))} title="Flip board (f)">
             <Icon name="flip" />
           </button>
@@ -276,9 +311,14 @@ export function BuildView() {
               <button className="btn sm" title="Play a practice game from this position" onClick={() => playFrom(current)}>
                 <Icon name="play" size={14} /> Play from here
               </button>
+              <span className="spacer" />
+              <button className="btn sm ghost" title="Add lines from a PGN (paste or file)" onClick={() => setImporting(true)}>
+                <Icon name="upload" size={14} /> Add PGN
+              </button>
             </div>
           </div>
           <LineBar line={line} ply={ply} rep={rep} onJump={setPly} />
+          {arrival && <ArrivalComment rep={rep} move={arrival} ply={ply} />}
           {unsaved > 0 && (
             <div className="section">
               <div className="save-banner">
@@ -348,10 +388,14 @@ export function BuildView() {
           <span className="kbd">←</span> <span className="kbd">→</span> move through the line · <span className="kbd">Enter</span> save ·{' '}
           <span className="kbd">Esc</span> discard · <span className="kbd">f</span> flip board · <span className="kbd">Ctrl</span>+
           <span className="kbd">Z</span> undo
+          <br />
+          Draw on the board like on Lichess: right-click and drag for an arrow, right-click a square for a circle (with{' '}
+          <span className="kbd">Shift</span> red, <span className="kbd">Alt</span> blue). They are saved with the position.
         </div>
       </div>
 
       {dialog && <ChoiceDialog {...dialog} onClose={() => setDialog(null)} />}
+      {importing && <ImportPgnDialog rep={rep} onClose={() => setImporting(false)} />}
     </div>
   );
 }
@@ -472,26 +516,96 @@ function RepMoves({
             {(editing === m.uci || m.comment) && (
               <div style={{ flexBasis: '100%' }}>
                 {editing === m.uci ? (
-                  <input
-                    autoFocus
-                    className="input"
-                    style={{ width: '100%' }}
-                    defaultValue={m.comment ?? ''}
-                    placeholder="Idea behind the move, plan, trap…"
-                    onBlur={(e) => {
-                      updateRep(rep.id, (r) => setMoveComment(r, positionKey, m.uci, e.target.value.trim()), 'comment');
+                  <CommentEditor
+                    initial={m.comment ?? ''}
+                    onSave={(text) => {
+                      updateRep(rep.id, (r) => setMoveComment(r, positionKey, m.uci, text), 'comment');
                       setEditing(null);
                     }}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                    onCancel={() => setEditing(null)}
                   />
                 ) : (
-                  <div className="small muted">{m.comment}</div>
+                  <CommentText key={m.comment} text={m.comment!} />
                 )}
               </div>
             )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** Multi-line comment box; saves when you leave it (or Ctrl+Enter), Esc cancels. */
+function CommentEditor({ initial, onSave, onCancel }: { initial: string; onSave: (text: string) => void; onCancel: () => void }) {
+  const cancelled = useRef(false);
+  return (
+    <textarea
+      autoFocus
+      className="input"
+      style={{ width: '100%' }}
+      rows={Math.min(12, Math.max(3, Math.ceil(initial.length / 55) + initial.split('\n').length - 1))}
+      defaultValue={initial}
+      placeholder="Idea behind the move, plan, trap…"
+      onBlur={(e) => (cancelled.current ? onCancel() : onSave(e.target.value.trim()))}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          cancelled.current = true;
+          (e.target as HTMLTextAreaElement).blur();
+        } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) (e.target as HTMLTextAreaElement).blur();
+      }}
+    />
+  );
+}
+
+/** A comment with its paragraphs; long ones (book chapters) are folded. */
+function CommentText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 420 || text.split('\n').length > 8;
+  return (
+    <div>
+      <div className={`comment-text small muted ${long && !open ? 'clamped' : ''}`}>{text}</div>
+      {long && (
+        <button className="btn sm ghost" onClick={() => setOpen(!open)}>
+          {open ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The comment of the move that led to this position: what a book says about the position you are looking at. */
+function ArrivalComment({ rep, move, ply }: { rep: Repertoire; move: PlayedMove; ply: number }) {
+  const updateRep = useApp((s) => s.updateRep);
+  const saved = findMove(rep, move.from, move.uci);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    setEditing(false);
+  }, [move.from, move.uci]);
+  if (!saved) return null;
+  return (
+    <div className="section stack arrival" style={{ gap: 6 }}>
+      <div className="row" style={{ gap: 8 }}>
+        <span className="arrival-move">{moveNumber(ply - 1, true)} {saved.san}</span>
+        <span className="spacer" />
+        {!editing && (
+          <button className="btn sm ghost" onClick={() => setEditing(true)} title={saved.comment ? 'Edit this comment' : 'Comment on this move'}>
+            <Icon name="comment" size={14} /> {saved.comment ? 'Edit' : 'Add comment'}
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <CommentEditor
+          initial={saved.comment ?? ''}
+          onSave={(text) => {
+            updateRep(rep.id, (r) => setMoveComment(r, move.from, move.uci, text), 'comment');
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        saved.comment && <CommentText key={saved.comment} text={saved.comment} />
+      )}
     </div>
   );
 }

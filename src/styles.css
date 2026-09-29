@@ -1361,3 +1361,89 @@ a.btn {
   color: var(--gap);
 }
 
+
+/* ---------- PGN import, comments and drawings ---------- */
+
+.comment-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.comment-text.clamped {
+  max-height: 9em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 65%, transparent);
+  mask-image: linear-gradient(#000 65%, transparent);
+}
+
+.arrival {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.arrival-move {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.btn.icon {
+  position: relative;
+}
+
+.btn.icon[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn.icon .pip {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.stat-row.wrap {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+
+.file-chip {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  min-width: 0;
+}
+
+.radio {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.radio input {
+  margin-top: 3px;
+}
+
+.train .comment-text {
+  max-height: 12em;
+  overflow: auto;
+}
+
+.field > label.radio {
+  font-weight: 400;
+}

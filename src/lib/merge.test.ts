@@ -4,7 +4,8 @@ import { Chess } from 'chessops/chess';
 import { parseFen } from 'chessops/fen';
 import { encodeBoard, legalMoves, moveIndex, sampleMove } from './maiaEncoding';
 import { mergeData } from './merge';
-import { addLine, newRepertoire, type Repertoire } from './repertoire';
+import { addLine, newRepertoire, setShapes, type Repertoire } from './repertoire';
+import { classify } from './sync';
 import { gradeCard, Rating, syncCards } from './srs';
 import { EMPTY_DATA, type AppData, type Profile } from './store';
 
@@ -103,5 +104,22 @@ describe('maia encoding', () => {
       { uci: 'c', san: 'c', move: { from: 0, to: 3 }, p: 0.01 },
     ];
     for (const r of [0, 0.5, 0.99, 0.9999]) expect(sampleMove(preds, 0.02, () => r)!.uci).not.toBe('c');
+  });
+});
+
+describe('classify (what counts as an edit for syncing)', () => {
+  const base = data({ profiles: [profile('p')], repertoires: [rep('r', 'p', ['e4', 'e5'], 10)] });
+  const withRep = (r: Repertoire) => ({ ...base, repertoires: [r] });
+
+  it('treats drawing an arrow like any other edit, so it syncs right away', () => {
+    const r = base.repertoires[0];
+    expect(classify(base, withRep(setShapes(r, START_KEY, ['Ge2e4'])))).toBe('edit');
+  });
+
+  it('keeps counting comments as edits and grades as training', () => {
+    const r = base.repertoires[0];
+    const id = Object.keys(r.cards)[0];
+    expect(classify(base, withRep({ ...r, cards: { ...r.cards, [id]: gradeCard(r.cards[id], Rating.Good, 5000) } }))).toBe('training');
+    expect(classify(base, withRep({ ...r, notes: { x: 'note' } }))).toBe('edit');
   });
 });

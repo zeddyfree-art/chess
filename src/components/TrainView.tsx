@@ -4,6 +4,7 @@ import { edgeId, findPath, isMine, movesAt, myEdgesInOrder, reachable, ROOT, typ
 import { buildQueue, counts, formatInterval, gradeCard, Rating, State, type TrainItem } from '../lib/srs';
 import { activeRep, useApp } from '../lib/store';
 import { saveNow, type SaveResult } from '../lib/sync';
+import { tokensToShapes } from '../lib/shapes';
 import { Board, type Shape } from './Board';
 import { Icon } from './Icon';
 import { SavedNote, saveMessage } from './SaveIndicator';
@@ -186,6 +187,10 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
 
   const item = queue[index];
   const path = useMemo(() => (item ? (findPath(rep, item.from) ?? []) : []), [item, rep]);
+  // While a new move is being taught, the author's arrows and circles for this position are shown too.
+  const teaching = item?.kind === 'learn' && phase === 'await';
+  const taught = rep.shapes?.[item?.from ?? ''];
+  const drawn = useMemo(() => (teaching ? (tokensToShapes(taught) as Shape[]) : undefined), [teaching, taught]);
 
   // Session finished: save right away and show the result.
   useEffect(() => {
@@ -240,7 +245,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
         setMessage(
           <>
             New move: play <b>{item.san}</b>
-            {comment(rep, item) && <div className="small muted">{comment(rep, item)}</div>}
+            {comment(rep, item) && <div className="comment-text small muted">{comment(rep, item)}</div>}
           </>,
         );
       }
@@ -293,7 +298,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
       setMessage(
         <>
           {info}
-          {comment(rep, item) && <div className="small muted">{comment(rep, item)}</div>}
+          {comment(rep, item) && <div className="comment-text small muted">{comment(rep, item)}</div>}
         </>,
       );
       later(next, mistake || comment(rep, item) ? 1400 : 700);
@@ -368,6 +373,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
           movable={phase === 'await' ? rep.side : null}
           lastMove={lastMove}
           shapes={shapes}
+          drawn={drawn}
           onMove={onMove}
         />
       </div>

@@ -79,7 +79,7 @@ const EDIT_DELAY = 1500;
 const TRAINING_DELAY = 30_000;
 
 /** What changed between two versions of the data: nothing that syncs, only training progress, or an edit. */
-function classify(a: AppData, b: AppData): 'none' | 'training' | 'edit' {
+export function classify(a: AppData, b: AppData): 'none' | 'training' | 'edit' {
   if (a.profiles === b.profiles && a.repertoires === b.repertoires && a.deleted === b.deleted) return 'none';
   if (a.profiles !== b.profiles || a.deleted !== b.deleted || a.repertoires.length !== b.repertoires.length) return 'edit';
   let training = false;
@@ -87,7 +87,15 @@ function classify(a: AppData, b: AppData): 'none' | 'training' | 'edit' {
     const x = a.repertoires[i];
     const y = b.repertoires[i];
     if (x === y) continue;
-    if (x.id !== y.id || x.positions !== y.positions || x.notes !== y.notes || x.engine !== y.engine || x.name !== y.name || x.side !== y.side) {
+    if (
+      x.id !== y.id ||
+      x.positions !== y.positions ||
+      x.notes !== y.notes ||
+      x.shapes !== y.shapes ||
+      x.engine !== y.engine ||
+      x.name !== y.name ||
+      x.side !== y.side
+    ) {
       return 'edit';
     }
     training = true; // only cards (review schedule) changed

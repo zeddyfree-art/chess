@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { googleClientId, preloadGoogle, setClientIdOverride, type DriveFile } from '../lib/drive';
 import { downloadText, safeName } from '../lib/download';
-import { exportPgn, importPgn } from '../lib/pgn';
+import { exportPgn } from '../lib/pgn';
 import { getLichessUser, getToken, logout, RATING_BUCKETS, ratingLabel, setToken, SPEED_LABELS, SPEEDS, startLogin, verifyToken } from '../lib/lichess';
 import { isMaiaDownloaded, removeMaia } from '../lib/maia';
-import { stats, toMoves } from '../lib/repertoire';
+import { stats } from '../lib/repertoire';
 import { connectDrive, disconnectDrive, driveBackups, loadDriveBackup, reconnectDrive, syncNow, useSync } from '../lib/sync';
 import { activeRep, exportBackup, parseBackup, PROFILE_COLORS, profileRating, useApp, type AppData, type Profile } from '../lib/store';
 import { ChoiceDialog, type Choice } from './Dialog';
 import { Icon } from './Icon';
+import { ImportPgnDialog } from './ImportPgnDialog';
 
 export function timeAgo(t: number | null): string {
   if (!t) return 'never';
@@ -24,9 +25,10 @@ type DialogState = { title: string; body: React.ReactNode; choices: Choice[] } |
 export function SettingsView() {
   const data = useApp((s) => s.data);
   const rep = useApp(activeRep);
-  const { addProfile, updateProfile, deleteProfile, updateRep, renameRepertoire, deleteRepertoire, restoreRepertoire, replaceData, markBackup, showToast } =
+  const { addProfile, updateProfile, deleteProfile, renameRepertoire, deleteRepertoire, restoreRepertoire, replaceData, markBackup, showToast } =
     useApp.getState();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [importing, setImporting] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
   const [tokenMsg, setTokenMsg] = useState<string | null>(null);
   const [user, setUser] = useState(getLichessUser());
@@ -68,13 +70,6 @@ export function SettingsView() {
     } catch (e) {
       showToast((e as Error).message);
     }
-  };
-
-  const mergePgn = async (file: File | undefined) => {
-    if (!file || !rep) return;
-    const res = importPgn(rep, await file.text());
-    updateRep(rep.id, () => res.rep, 'PGN import');
-    showToast(`Added ${toMoves(res.added)} new moves${res.errors.length ? ` (${res.errors.length} warnings)` : ''}`);
   };
 
   return (
@@ -195,10 +190,9 @@ export function SettingsView() {
               <button className="btn" onClick={() => downloadText(`${safeName(rep.name)}.pgn`, exportPgn(rep), 'application/x-chess-pgn')}>
                 <Icon name="download" size={16} /> Export PGN
               </button>
-              <label className="btn">
+              <button className="btn" onClick={() => setImporting(true)}>
                 <Icon name="upload" size={16} /> Add PGN…
-                <input type="file" accept=".pgn,text/plain" hidden onChange={(e) => mergePgn(e.target.files?.[0])} />
-              </label>
+              </button>
               <span className="spacer" />
               <button
                 className="btn danger"
@@ -283,6 +277,7 @@ export function SettingsView() {
       </div>
 
       {dialog && <ChoiceDialog {...dialog} onClose={() => setDialog(null)} />}
+      {importing && rep && <ImportPgnDialog rep={rep} onClose={() => setImporting(false)} />}
     </div>
   );
 }
