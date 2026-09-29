@@ -156,6 +156,12 @@ function withoutEdge(rep: Repertoire, from: string, uci: string): Repertoire {
   return { ...rep, positions, updatedAt: Date.now() };
 }
 
+/** Books, PGN and move numbers count a *move* as White's move plus Black's reply (1.e4 e5 is one move),
+ *  so N half-moves (plies) make ceil(N / 2) moves. Everything the user sees is counted this way;
+ *  the half-move counts stay available for tooltips. */
+export const toMoves = (halfMoves: number): number => Math.ceil(halfMoves / 2);
+
+/** Number of half-moves (edges) in a position graph. */
 export function countEdges(positions: Record<string, RepMove[]>): number {
   let n = 0;
   for (const v of Object.values(positions)) n += v.length;
@@ -168,11 +174,13 @@ export function deleteMove(rep: Repertoire, from: string, uci: string): Repertoi
 }
 
 /** How many moves disappear if this move is deleted (transposed lines that stay reachable are kept). */
-export function deletionImpact(rep: Repertoire, from: string, uci: string): { moves: number; cards: number } {
+export function deletionImpact(rep: Repertoire, from: string, uci: string): { moves: number; plies: number; cards: number } {
   const before = garbageCollect(rep);
   const after = deleteMove(rep, from, uci);
+  const plies = countEdges(before.positions) - countEdges(after.positions);
   return {
-    moves: countEdges(before.positions) - countEdges(after.positions),
+    plies,
+    moves: toMoves(plies),
     cards: Object.keys(before.cards).length - Object.keys(after.cards).length,
   };
 }
@@ -272,14 +280,24 @@ export function myEdgesInOrder(rep: Repertoire): { from: string; uci: string; sa
 }
 
 export interface RepStats {
+  /** Size in full moves (White's move + Black's reply), like books and PGN. */
   moves: number;
+  /** The same size in half-moves. */
+  plies: number;
+  /** Your own moves: what you have to learn (one training card each). */
   myMoves: number;
+  /** The opponent's half-moves that you prepared for. */
   oppMoves: number;
   positions: number;
+  /** Number of distinct lines (variations): where a line ends. */
   lineEnds: number;
   /** Positions where we have more than one move prepared. */
   doubles: number;
+  /** Longest line, in half-moves and in full moves. */
   maxDepth: number;
+  longest: number;
+  /** Average line length in full moves. */
+  avgLine: number;
 }
 
 export function stats(rep: Repertoire): RepStats {
@@ -296,13 +314,29 @@ export function stats(rep: Repertoire): RepStats {
   }
   let lineEnds = 0;
   let maxDepth = 0;
+  let depthSum = 0;
   const walk = (nodes: TreeNode[]) => {
     for (const n of nodes) {
       maxDepth = Math.max(maxDepth, n.ply + 1);
-      if (!n.children.length && !n.transposition) lineEnds++;
+      if (!n.children.length && !n.transposition) {
+        lineEnds++;
+        depthSum += toMoves(n.ply + 1);
+      }
       walk(n.children);
     }
   };
   walk(buildTree(rep));
-  return { moves: myMoves + oppMoves, myMoves, oppMoves, positions: live.size, lineEnds, doubles, maxDepth };
+  const plies = myMoves + oppMoves;
+  return {
+    moves: toMoves(plies),
+    plies,
+    myMoves,
+    oppMoves,
+    positions: live.size,
+    lineEnds,
+    doubles,
+    maxDepth,
+    longest: toMoves(maxDepth),
+    avgLine: lineEnds ? Math.round(depthSum / lineEnds) : 0,
+  };
 }

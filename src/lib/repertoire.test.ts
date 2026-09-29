@@ -11,6 +11,7 @@ import {
   newRepertoire,
   ROOT,
   stats,
+  toMoves,
   type Repertoire,
 } from './repertoire';
 import { exportPgn, importPgn } from './pgn';
@@ -76,9 +77,9 @@ describe('repertoire graph', () => {
     expect(Object.keys(r.cards)).toHaveLength(5);
     const e5 = line(['e4', 'e5']);
     const impact = deletionImpact(r, e5[1].from, e5[1].uci);
-    expect(impact).toEqual({ moves: 4, cards: 2 });
+    expect(impact).toEqual({ plies: 4, moves: 2, cards: 2 });
     const after = deleteMove(r, e5[1].from, e5[1].uci);
-    expect(stats(after).moves).toBe(5);
+    expect(stats(after).plies).toBe(5);
     expect(Object.keys(after.cards)).toHaveLength(3);
   });
 
@@ -108,7 +109,7 @@ describe('pgn', () => {
     expect(res.rep.positions[c5.from].find((m) => m.san === 'Nf3')?.comment).toBe('Open Sicilian');
 
     const again = importPgn(newRepertoire('p', 't', 'white'), exportPgn(res.rep));
-    expect(stats(again.rep).moves).toBe(9);
+    expect(stats(again.rep).plies).toBe(9);
   });
 
   it('reports illegal moves instead of crashing', () => {
@@ -132,5 +133,43 @@ describe('srs', () => {
     expect(queue.map((q) => q.san)).toEqual(['Nf3', 'c3']);
     const later = buildQueue(r, { newLimit: 0, now: now + 1000 * 60 * 60 * 24 * 30 });
     expect(later.map((q) => q.san)).toEqual(['e4']);
+  });
+});
+
+describe('counting moves', () => {
+  it('counts a move as White\'s move plus Black\'s reply', () => {
+    expect(toMoves(0)).toBe(0);
+    expect(toMoves(1)).toBe(1); // 1.e4
+    expect(toMoves(2)).toBe(1); // 1.e4 e5
+    expect(toMoves(3)).toBe(2); // 1.e4 e5 2.Nf3
+    expect(toMoves(20)).toBe(10);
+  });
+
+  it('reports one line in books\' terms, with half-moves alongside', () => {
+    const r = rep('white', ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6']);
+    const st = stats(r);
+    expect(st.plies).toBe(6);
+    expect(st.moves).toBe(3); // 1.e4 e5 2.Nf3 Nc6 3.Bb5 a6
+    expect(st.myMoves).toBe(3);
+    expect(st.oppMoves).toBe(3);
+    expect(st.lineEnds).toBe(1);
+    expect(st.longest).toBe(3);
+    expect(st.avgLine).toBe(3);
+  });
+
+  it('counts branches once and reports lines separately', () => {
+    // 1.e4 e5 2.Nf3 Nc6 | 1.e4 c5 2.Nf3 | 1.d4 d5  ->  e4 e5 Nf3 Nc6 c5 Nf3 d4 d5 = 8 half-moves
+    const r = rep('white', ['e4', 'e5', 'Nf3', 'Nc6'], ['e4', 'c5', 'Nf3'], ['d4', 'd5']);
+    const st = stats(r);
+    expect(st.plies).toBe(8);
+    expect(st.moves).toBe(4);
+    expect(st.lineEnds).toBe(3);
+    expect(st.longest).toBe(2);
+  });
+
+  it('shows a removed leaf reply as one move, not zero', () => {
+    const r = rep('white', ['e4', 'e5']);
+    const l = line(['e4', 'e5']);
+    expect(deletionImpact(r, l[1].from, l[1].uci)).toEqual({ plies: 1, moves: 1, cards: 0 });
   });
 });

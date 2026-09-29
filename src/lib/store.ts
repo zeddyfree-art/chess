@@ -332,27 +332,86 @@ export function profileRating(p: Profile): number {
 }
 
 // ---------------------------------------------------------------------------
-// Persistence
+// Persistence: every change is written to IndexedDB shortly after it happens, and
+// immediately when the tab is hidden or closed (`flushLocal`).
+
+export type SaveStatus = 'saved' | 'saving' | 'error';
+
+export const useSaveState = create<{ status: SaveStatus; at: number | null; error: string | null }>()(() => ({
+  status: 'saved',
+  at: null,
+  error: null,
+}));
+
+let flusher: (() => Promise<void>) | null = null;
+
+/** Writes any pending change to local storage right now. Resolves when it is on disk (or failed). */
+export function flushLocal(): Promise<void> {
+  return flusher?.() ?? Promise.resolve();
+}
+
+const STORAGE_UNAVAILABLE = 'Browser storage is unavailable (private window or blocked site data). Changes are lost when you close this tab.';
 
 export async function loadData() {
   let data: AppData | undefined;
-  if (dataStore) data = (await idbGet('data', dataStore).catch(() => undefined)) as AppData | undefined;
+  let readError: string | null = dataStore ? null : STORAGE_UNAVAILABLE;
+  if (dataStore) {
+    try {
+      data = (await idbGet('data', dataStore)) as AppData | undefined;
+    } catch {
+      readError = STORAGE_UNAVAILABLE;
+    }
+  }
   useApp.setState({ data: { ...EMPTY_DATA, ...(data ?? {}) }, loaded: true });
+  if (readError) useSaveState.setState({ status: 'error', error: readError });
   // Ask the browser not to evict our storage under pressure.
   navigator.storage?.persist?.().catch(() => {});
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   let last = useApp.getState().data;
+  let dirty = false;
+  let writing: Promise<void> | null = null;
+
+  const write = async (): Promise<void> => {
+    clearTimeout(timer);
+    timer = undefined;
+    if (writing) await writing.catch(() => {});
+    if (!dirty) return;
+    dirty = false;
+    const snapshot = last;
+    if (!dataStore) {
+      useSaveState.setState({ status: 'error', error: STORAGE_UNAVAILABLE });
+      return;
+    }
+    writing = idbSet('data', snapshot, dataStore)
+      .then(() => {
+        useSaveState.setState({ status: dirty ? 'saving' : 'saved', at: Date.now(), error: null });
+      })
+      .catch((e) => {
+        dirty = true; // try again with the next change or flush
+        console.error('Saving failed', e);
+        useSaveState.setState({ status: 'error', error: (e as Error)?.message || STORAGE_UNAVAILABLE });
+      })
+      .finally(() => {
+        writing = null;
+      });
+    await writing;
+  };
+  flusher = write;
+
   useApp.subscribe((s) => {
     if (s.data === last) return;
     last = s.data;
+    dirty = true;
+    if (useSaveState.getState().status !== 'error') useSaveState.setState({ status: 'saving' });
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (dataStore) idbSet('data', last, dataStore).catch((e) => console.error('Saving failed', e));
-    }, 300);
+    timer = setTimeout(() => void write(), 300);
   });
-  addEventListener('beforeunload', () => {
-    if (timer && dataStore) idbSet('data', last, dataStore);
+
+  // pagehide and "hidden" are the reliable moments on phones and tablets; beforeunload often never fires there.
+  addEventListener('pagehide', () => void write());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') void write();
   });
 }
 

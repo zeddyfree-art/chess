@@ -23,7 +23,7 @@ Live: <https://zeddyfree-art.github.io/chess/> · [Privacy Policy](https://zeddy
 
 | Screen | What you do there |
 | --- | --- |
-| **Overview** | The active player's repertoires, with moves, lines and what is due today. |
+| **Overview** | The active player's repertoires with their size and what is due today. Sizes are counted like books and PGN do: one **move** is White's move plus Black's reply (1.e4 e5 is one move); hover a number for the half-moves, your own moves and line lengths. |
 | **Build** | Board plus the current line. Moves you play are a *proposal* (dashed blue) until you **Save** (Enter) or **Discard** (Esc). Next to it: your prepared moves in this position (with number of follow-up moves, comments, ★ main move, delete), a note per position, and tabs **Lichess games**, **Masters** and **Engine**. **Train from here** and **Play from here** start from the position on the board. |
 | **Tree** | The whole repertoire as a diagram. Green = your move, outlined = opponent move with how often it is played; line thickness = popularity; red dashed nodes = **gaps** (played often, not prepared). Collapse/expand per branch or to a depth, highlight due / dubious / rare moves. Select a node to open it, train or play from it, or **Prune branch** (Delete) — you see beforehand how many moves and cards disappear, and everything can be undone (Ctrl+Z). |
 | **Train** | FSRS spaced repetition: each move you play is a card. New moves are shown first and quizzed again later in the session. **Practice lines** plays random lines through without affecting the schedule. Scoped to one branch when started with *Train from here* (review, drill the whole branch, or practice lines). |
@@ -35,6 +35,12 @@ Transpositions are recognised: the repertoire is a graph of *positions*, so 1.d4
 share their continuation.
 
 ## Your data and sync
+
+**Autosave:** every change is written to your device within a moment, and immediately when you switch tab or close it.
+The top bar shows *Saved* (or a warning if your browser blocks storage). With Google Drive connected, a repertoire edit
+is uploaded about a second and a half later, and training progress as soon as a session ends (or you press Stop), not
+card by card.
+
 
 Everything is stored in the browser (IndexedDB) — no account, no server. Optionally connect **Google Drive**
 (Settings → Sync & automatic backup) on each device you use:

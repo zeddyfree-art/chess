@@ -6,6 +6,7 @@ import { BuildView } from './components/BuildView';
 import { HomeView, NewRepertoireDialog } from './components/HomeView';
 import { Icon, type IconName } from './components/Icon';
 import { PlayView } from './components/PlayView';
+import { SaveIndicator } from './components/SaveIndicator';
 import { SettingsView } from './components/SettingsView';
 import { TrainView } from './components/TrainView';
 import { TreeView } from './components/TreeView';
@@ -181,6 +182,7 @@ function TopBar() {
       </nav>
 
       <span className="spacer" />
+      <SaveIndicator />
       <SyncButton />
       <button className="btn icon ghost" disabled={!canUndo} onClick={undoLast} title="Undo (Ctrl+Z)">
         <Icon name="undo" />

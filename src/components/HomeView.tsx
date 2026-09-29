@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Side } from '../lib/chess';
 import { importPgn } from '../lib/pgn';
-import { newRepertoire, stats } from '../lib/repertoire';
+import { newRepertoire, stats, toMoves } from '../lib/repertoire';
 import { counts } from '../lib/srs';
 import { activeProfile, useApp } from '../lib/store';
 import { Dialog } from './Dialog';
@@ -57,23 +57,31 @@ export function HomeView() {
               </div>
             </div>
             <div className="stat-row">
-              <div className="stat">
+              <div
+                className="stat"
+                title={`${st.moves} moves = ${st.plies} half-moves (${st.myMoves} yours, ${st.oppMoves} from your opponents). One move is White's move plus Black's reply.`}
+              >
                 <b>{st.moves}</b>
-                <span>moves</span>
+                <span>{st.moves === 1 ? 'move' : 'moves'}</span>
               </div>
-              <div className="stat">
+              <div className="stat" title="Distinct lines (variations): every route from the start to where your preparation ends">
                 <b>{st.lineEnds}</b>
-                <span>lines</span>
+                <span>{st.lineEnds === 1 ? 'line' : 'lines'}</span>
               </div>
-              <div className="stat">
+              <div className="stat" title="Your moves that are due for review">
                 <b style={{ color: srs.due ? 'var(--due)' : undefined }}>{srs.due}</b>
                 <span>due</span>
               </div>
-              <div className="stat">
+              <div className="stat" title="Your moves you have not learned yet">
                 <b style={{ color: srs.fresh ? 'var(--accent)' : undefined }}>{srs.fresh}</b>
                 <span>new</span>
               </div>
             </div>
+            {st.lineEnds > 0 && (
+              <div className="small muted">
+                {st.myMoves} of your moves to learn · lines average {st.avgLine} moves, longest {st.longest}
+              </div>
+            )}
             <div className="progress" title={`${srs.learned} of ${srs.total} moves learned`}>
               <div style={{ width: `${(srs.learned / Math.max(1, srs.total)) * 100}%` }} />
             </div>
@@ -103,6 +111,14 @@ export function HomeView() {
         )}
       </div>
 
+      {summaries.length > 0 && (
+        <div className="help">
+          Sizes are counted the way books and PGN do: <b>one move is White’s move plus Black’s reply</b> (1.e4 e5 is one
+          move), so a line of 20 half-moves is 10 moves. Hover a number to see the half-moves. <b>Lines</b> are distinct
+          variations; <b>due</b> and <b>new</b> count your own moves, which are what you train.
+        </div>
+      )}
+
       {creating && <NewRepertoireDialog onClose={() => setCreating(false)} />}
     </div>
   );
@@ -125,7 +141,7 @@ export function NewRepertoireDialog({ onClose }: { onClose: () => void }) {
         return;
       }
       rep = res.rep;
-      showToast(`Imported ${res.added} moves from ${res.games} ${res.games === 1 ? 'game' : 'games'}`);
+      showToast(`Imported ${toMoves(res.added)} moves from ${res.games} ${res.games === 1 ? 'game' : 'games'}`);
     }
     addRepertoire(rep);
     setView('build');

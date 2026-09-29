@@ -21,7 +21,7 @@ import {
   type DriveFile,
 } from './drive';
 import { mergeData, sameSyncedContent } from './merge';
-import { exportBackup, parseBackup, useApp, type AppData } from './store';
+import { exportBackup, flushLocal, parseBackup, useApp, useSaveState, type AppData } from './store';
 
 export type SyncStatus = 'unconfigured' | 'off' | 'syncing' | 'synced' | 'pending' | 'needs-auth' | 'error';
 
@@ -69,8 +69,31 @@ function writeMeta(patch: Partial<Meta>) {
 let changeSeq = 0;
 let applyingRemote = false;
 let running: Promise<void> | null = null;
+let queued: Promise<void> | null = null;
 let again = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
+let timerAt = 0;
+
+/** Upload soon after an edit; training progress can wait for the end of the session. */
+const EDIT_DELAY = 1500;
+const TRAINING_DELAY = 30_000;
+
+/** What changed between two versions of the data: nothing that syncs, only training progress, or an edit. */
+function classify(a: AppData, b: AppData): 'none' | 'training' | 'edit' {
+  if (a.profiles === b.profiles && a.repertoires === b.repertoires && a.deleted === b.deleted) return 'none';
+  if (a.profiles !== b.profiles || a.deleted !== b.deleted || a.repertoires.length !== b.repertoires.length) return 'edit';
+  let training = false;
+  for (let i = 0; i < a.repertoires.length; i++) {
+    const x = a.repertoires[i];
+    const y = b.repertoires[i];
+    if (x === y) continue;
+    if (x.id !== y.id || x.positions !== y.positions || x.notes !== y.notes || x.engine !== y.engine || x.name !== y.name || x.side !== y.side) {
+      return 'edit';
+    }
+    training = true; // only cards (review schedule) changed
+  }
+  return training ? 'training' : 'none';
+}
 
 function setStatus(patch: Partial<SyncState>) {
   useSync.setState(patch);
@@ -94,27 +117,39 @@ export function initSync() {
 
   let last = useApp.getState().data;
   useApp.subscribe((s) => {
-    if (s.data === last) return;
+    const before = last;
+    if (s.data === before) return;
     last = s.data;
     if (applyingRemote) return;
+    const kind = classify(before, s.data);
+    if (kind === 'none') return; // e.g. another repertoire was selected
     changeSeq++;
     if (!readMeta().connected) return;
     writeMeta({ dirty: true });
     if (useSync.getState().status !== 'syncing') setStatus({ status: validToken() ? 'pending' : 'needs-auth' });
-    schedule(4000);
+    schedule(kind === 'edit' ? EDIT_DELAY : TRAINING_DELAY);
   });
 
-  // Pick up changes made on another device when coming back to the app.
   document.addEventListener('visibilitychange', () => {
+    // Coming back: pick up changes made on another device.
     if (document.visibilityState === 'visible') schedule(300);
+    // Leaving (switching app or tab): push anything still waiting while the page is alive.
+    else if (readMeta().connected && readMeta().dirty && validToken()) void flushLocal().then(syncNow);
   });
   setInterval(() => document.visibilityState === 'visible' && schedule(0), 5 * 60_000);
   if (meta.connected && validToken()) schedule(0);
 }
 
+/** Runs a sync after `ms`. An earlier pending deadline is kept, so a burst of edits cannot push the upload back forever. */
 function schedule(ms: number) {
+  const at = Date.now() + ms;
+  if (timer && timerAt <= at) return;
   clearTimeout(timer);
-  timer = setTimeout(() => void syncNow(), ms);
+  timerAt = at;
+  timer = setTimeout(() => {
+    timer = undefined;
+    void syncNow();
+  }, ms);
 }
 
 /** Connect this device (opens Google's popup; call from a click). */
@@ -140,10 +175,14 @@ export async function disconnectDrive() {
   setStatus({ status: idleStatus(), account: null, lastSyncAt: null, error: null });
 }
 
+/** Syncs and resolves once a run that started *after* this call has finished, so callers know their latest change went out. */
 export function syncNow(): Promise<void> {
   if (running) {
-    again = true;
-    return running;
+    queued ??= running.then(() => {
+      queued = null;
+      return syncNow();
+    });
+    return queued;
   }
   running = run().finally(() => {
     running = null;
@@ -153,6 +192,25 @@ export function syncNow(): Promise<void> {
     }
   });
   return running;
+}
+
+export interface SaveResult {
+  /** Written to this device's storage. */
+  local: boolean;
+  /** State of Google Drive after trying: 'off' when it is not connected. */
+  drive: SyncStatus;
+  error?: string;
+}
+
+/** Saves everything now: local storage first, then Google Drive if it is connected. Never throws. */
+export async function saveNow(): Promise<SaveResult> {
+  await flushLocal();
+  const local = useSaveState.getState().status !== 'error';
+  const connected = readMeta().connected && !!googleClientId();
+  if (!connected) return { local, drive: 'off' };
+  await syncNow().catch(() => {});
+  const st = useSync.getState();
+  return { local, drive: st.status, error: st.error ?? undefined };
 }
 
 async function run() {

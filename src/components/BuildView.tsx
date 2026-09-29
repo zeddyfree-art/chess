@@ -16,6 +16,7 @@ import {
   ROOT,
   setMoveComment,
   setNote,
+  toMoves,
   type Repertoire,
   type RepMove,
 } from '../lib/repertoire';
@@ -135,7 +136,7 @@ export function BuildView() {
       'save moves',
     );
     showToast(
-      replace ? 'Move replaced' : `${added} ${added === 1 ? 'move' : 'moves'} saved`,
+      replace ? 'Move replaced' : `${toMoves(added)} ${toMoves(added) === 1 ? 'move' : 'moves'} saved`,
       { label: 'Undo', run: undoLast },
     );
   };
@@ -198,7 +199,7 @@ export function BuildView() {
           kind: 'danger',
           run: () => {
             updateRep(rep.id, (r) => deleteMove(r, key, m.uci), `${m.san} deleted`);
-            showToast(`Deleted ${m.san} and ${impact.moves - 1} follow-up moves`, { label: 'Undo', run: undoLast });
+            showToast(`Deleted ${m.san} and everything after it (${impact.moves} ${impact.moves === 1 ? 'move' : 'moves'})`, { label: 'Undo', run: undoLast });
           },
         },
       ],
@@ -408,6 +409,7 @@ function RepMoves({
       }),
     [rep, moves],
   );
+  // `sizes` are half-moves; the badge shows full moves, with the exact count on hover.
 
   if (!moves.length) {
     return (
@@ -445,7 +447,9 @@ function RepMoves({
                 </span>
               )}
             </span>
-            <span className="badge">{sizes[i] === 1 ? 'line end' : `${sizes[i]} moves`}</span>
+            <span className="badge" title={`${sizes[i]} half-moves in this branch`}>
+              {sizes[i] === 1 ? 'line end' : `${toMoves(sizes[i])} ${toMoves(sizes[i]) === 1 ? 'move' : 'moves'}`}
+            </span>
             {card && card.state !== State.New && card.due <= now && <span className="badge due">due</span>}
             {card && card.state === State.New && <span className="badge accent">new</span>}
             {flag && label?.tone !== 'ok' && <span className="badge gap">better: {flag.bestSan}</span>}

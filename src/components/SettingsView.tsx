@@ -3,7 +3,7 @@ import { googleClientId, preloadGoogle, setClientIdOverride, type DriveFile } fr
 import { exportPgn, importPgn } from '../lib/pgn';
 import { getLichessUser, getToken, logout, RATING_BUCKETS, ratingLabel, setToken, SPEED_LABELS, SPEEDS, startLogin, verifyToken } from '../lib/lichess';
 import { isMaiaDownloaded, removeMaia } from '../lib/maia';
-import { stats } from '../lib/repertoire';
+import { stats, toMoves } from '../lib/repertoire';
 import { connectDrive, disconnectDrive, driveBackups, loadDriveBackup, reconnectDrive, syncNow, useSync } from '../lib/sync';
 import { activeRep, exportBackup, parseBackup, PROFILE_COLORS, profileRating, useApp, type AppData, type Profile } from '../lib/store';
 import { ChoiceDialog, type Choice } from './Dialog';
@@ -84,7 +84,7 @@ export function SettingsView() {
     if (!file || !rep) return;
     const res = importPgn(rep, await file.text());
     updateRep(rep.id, () => res.rep, 'PGN import');
-    showToast(`Added ${res.added} new moves${res.errors.length ? ` (${res.errors.length} warnings)` : ''}`);
+    showToast(`Added ${toMoves(res.added)} new moves${res.errors.length ? ` (${res.errors.length} warnings)` : ''}`);
   };
 
   return (

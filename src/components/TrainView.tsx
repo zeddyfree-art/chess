@@ -3,8 +3,10 @@ import { formatLine, moveFromBoard, uciToArrow } from '../lib/chess';
 import { edgeId, findPath, isMine, movesAt, myEdgesInOrder, reachable, ROOT, type PathStep, type Repertoire } from '../lib/repertoire';
 import { buildQueue, counts, formatInterval, gradeCard, Rating, State, type TrainItem } from '../lib/srs';
 import { activeRep, useApp } from '../lib/store';
+import { saveNow, type SaveResult } from '../lib/sync';
 import { Board, type Shape } from './Board';
 import { Icon } from './Icon';
+import { SavedNote, saveMessage } from './SaveIndicator';
 
 type Mode = 'review' | 'lines';
 
@@ -163,6 +165,10 @@ function useFlash() {
 
 function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QItem[]; onExit: () => void }) {
   const updateRep = useApp((s) => s.updateRep);
+  const showToast = useApp((s) => s.showToast);
+  const [saved, setSaved] = useState<SaveResult | 'saving' | null>(null);
+  // Autosave: cards are stored as you answer them, but the upload to Google Drive waits for the end of the session.
+  const unsaved = useRef(false);
   const [queue, setQueue] = useState(initial);
   const [index, setIndex] = useState(0);
   const [pos, setPos] = useState(ROOT);
@@ -180,6 +186,35 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
 
   const item = queue[index];
   const path = useMemo(() => (item ? (findPath(rep, item.from) ?? []) : []), [item, rep]);
+
+  // Session finished: save right away and show the result.
+  useEffect(() => {
+    if (phase !== 'done' || !unsaved.current) return;
+    unsaved.current = false;
+    setSaved('saving');
+    let alive = true;
+    saveNow().then((r) => alive && setSaved(r));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  // Left mid-session (Stop, or another screen): save what has been answered so far.
+  useEffect(
+    () => () => {
+      if (unsaved.current) void saveNow();
+    },
+    [],
+  );
+
+  const stop = () => {
+    if (unsaved.current) {
+      unsaved.current = false;
+      void saveNow().then((r) => showToast(saveMessage(r)));
+    }
+    onExit();
+  };
 
   // Set up the position for the current item: show the line, then play the opponent's last move.
   useEffect(() => {
@@ -214,6 +249,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
   }, [index, item?.id]);
 
   const grade = (g: Rating.Again | Rating.Hard | Rating.Good) => {
+    unsaved.current = true;
     let due = 0;
     updateRep(
       rep.id,
@@ -311,6 +347,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
             <span>still due</span>
           </div>
         </div>
+        {saved && <SavedNote state={saved} />}
         <div className="row">
           <button className="btn primary" onClick={onExit}>
             Back
@@ -355,7 +392,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
               <Icon name="hint" size={16} /> Hint
             </button>
             <span className="spacer" />
-            <button className="btn ghost" onClick={onExit}>
+            <button className="btn ghost" onClick={stop}>
               Stop
             </button>
           </div>

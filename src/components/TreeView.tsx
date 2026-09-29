@@ -12,6 +12,7 @@ import {
   movesAt,
   reachable,
   ROOT,
+  toMoves,
   type Repertoire,
   type TreeNode,
 } from '../lib/repertoire';
@@ -248,7 +249,7 @@ export function TreeView() {
           run: () => {
             updateRep(rep.id, (r) => deleteMove(r, n.from, n.uci), `pruned branch ${n.san}`);
             setSelected(null);
-            showToast(`Branch pruned (${impact.moves} moves)`, { label: 'Undo', run: undoLast });
+            showToast(`Branch pruned (${impact.moves} ${impact.moves === 1 ? 'move' : 'moves'})`, { label: 'Undo', run: undoLast });
           },
         },
       ],
@@ -403,7 +404,7 @@ export function TreeView() {
                         </text>
                         {!ln.open && (
                           <text className="size-label" x={12} y={4} textAnchor="start">
-                            {n.size - 1}
+                            {toMoves(n.size - 1)}
                           </text>
                         )}
                       </g>
@@ -542,8 +543,12 @@ function NodeDetails({
       <div style={{ fontWeight: 600 }}>{formatLine(path)}</div>
       <div className="row wrap">
         <span className={`badge ${isMine(rep, node.from) ? 'mine' : 'opp'}`}>{isMine(rep, node.from) ? 'your move' : 'opponent'}</span>
-        <span className="badge">{node.size} moves in branch</span>
-        <span className="badge">{node.leaves} line ends</span>
+        <span className="badge" title={`${node.size} half-moves`}>
+          {toMoves(node.size)} {toMoves(node.size) === 1 ? 'move' : 'moves'} in branch
+        </span>
+        <span className="badge">
+          {node.leaves} {node.leaves === 1 ? 'line' : 'lines'}
+        </span>
         {cards > 0 && <span className="badge accent">{cards} cards</span>}
         {due > 0 && <span className="badge due">{due} due</span>}
         {share !== undefined && <span className="badge">{formatPct(share)} played</span>}
