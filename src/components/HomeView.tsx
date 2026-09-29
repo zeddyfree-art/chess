@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import type { Side } from '../lib/chess';
-import { importPgn } from '../lib/pgn';
-import { newRepertoire, stats, toMoves } from '../lib/repertoire';
-import { counts } from '../lib/srs';
+import { downloadText, safeName } from '../lib/download';
+import { exportPgn, importPgn } from '../lib/pgn';
+import { newRepertoire, stats, toMoves, type Repertoire } from '../lib/repertoire';
+import { counts, State } from '../lib/srs';
 import { activeProfile, useApp } from '../lib/store';
+import { useSync } from '../lib/sync';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 
@@ -12,6 +14,7 @@ export function HomeView() {
   const profile = useApp(activeProfile);
   const { setActiveRep, setView } = useApp.getState();
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<Repertoire | null>(null);
   const reps = data.repertoires.filter((r) => r.profileId === data.activeProfileId);
 
   const summaries = useMemo(() => reps.map((r) => ({ rep: r, stats: stats(r), srs: counts(r) })), [reps]);
@@ -51,9 +54,29 @@ export function HomeView() {
           <div key={rep.id} className={`card rep-card ${rep.id === data.activeRepId ? 'active' : ''}`} onClick={() => open(rep.id, 'build')}>
             <div className="row">
               <div className={`side-icon ${rep.side}`}>{rep.side === 'white' ? '♔' : '♚'}</div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 650, fontSize: 15 }}>{rep.name}</div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontWeight: 650, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rep.name}>
+                  {rep.name}
+                </div>
                 <div className="small muted">{rep.side === 'white' ? 'with White' : 'with Black'}</div>
+              </div>
+              <div className="row" style={{ gap: 2 }} onClick={(e) => e.stopPropagation()}>
+                <button
+                  className="btn sm icon ghost"
+                  title="Download as PGN"
+                  aria-label={`Download ${rep.name} as PGN`}
+                  onClick={() => downloadRepertoire(rep)}
+                >
+                  <Icon name="download" size={15} />
+                </button>
+                <button
+                  className="btn sm icon ghost danger"
+                  title="Delete repertoire"
+                  aria-label={`Delete ${rep.name}`}
+                  onClick={() => setDeleting(rep)}
+                >
+                  <Icon name="trash" size={15} />
+                </button>
               </div>
             </div>
             <div className="stat-row">
@@ -120,7 +143,57 @@ export function HomeView() {
       )}
 
       {creating && <NewRepertoireDialog onClose={() => setCreating(false)} />}
+      {deleting && <DeleteRepertoireDialog rep={deleting} onClose={() => setDeleting(null)} />}
     </div>
+  );
+}
+
+/** All lines as one PGN with variations: opens in Lichess studies, ChessBase, Chessbook and this app. */
+export function downloadRepertoire(rep: Repertoire) {
+  downloadText(`${safeName(rep.name)}.pgn`, exportPgn(rep), 'application/x-chess-pgn');
+  useApp.getState().showToast(`Downloaded ${safeName(rep.name)}.pgn`);
+}
+
+function DeleteRepertoireDialog({ rep, onClose }: { rep: Repertoire; onClose: () => void }) {
+  const driveOn = useSync((s) => s.status !== 'off' && s.status !== 'unconfigured');
+  const st = stats(rep);
+  const cards = Object.values(rep.cards);
+  const learned = cards.filter((c) => c.state !== State.New).length;
+
+  const confirm = () => {
+    const { deleteRepertoire, restoreRepertoire, showToast } = useApp.getState();
+    deleteRepertoire(rep.id);
+    onClose();
+    showToast(`Deleted “${rep.name}”`, { label: 'Undo', run: () => restoreRepertoire(rep) });
+  };
+
+  return (
+    <Dialog title={`Delete “${rep.name}”?`} onClose={onClose}>
+      <div>
+        This deletes the whole repertoire: <b>{st.moves}</b> {st.moves === 1 ? 'move' : 'moves'} in <b>{st.lineEnds}</b>{' '}
+        {st.lineEnds === 1 ? 'line' : 'lines'}, with your notes and training progress
+        {cards.length > 0 && (
+          <>
+            {' '}
+            (<b>{learned}</b> of {cards.length} moves learned)
+          </>
+        )}
+        .{driveOn && ' It is removed from your other devices too, because Google Drive sync is on.'}
+      </div>
+      <div className="help">You can undo it right after deleting, but not later. Download a copy first if you might want it back.</div>
+      <div className="row wrap">
+        <button className="btn" onClick={() => downloadRepertoire(rep)}>
+          <Icon name="download" size={16} /> Download PGN first
+        </button>
+        <span className="spacer" />
+        <button className="btn ghost" autoFocus onClick={onClose}>
+          Cancel
+        </button>
+        <button className="btn danger solid" onClick={confirm}>
+          Delete
+        </button>
+      </div>
+    </Dialog>
   );
 }
 

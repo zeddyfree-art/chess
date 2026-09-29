@@ -331,12 +331,30 @@ textarea.input {
   top: 0;
   z-index: 20;
   display: flex;
-  align-items: center;
-  gap: 14px;
-  height: 56px;
-  padding: 0 16px;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 56px;
+  padding: 11px 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+
+/* The left part may wrap onto a second line; the right part (Settings, undo, sync) never moves or hides. */
+.topbar-left {
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.topbar-right {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
 }
 
 .brand {
@@ -429,6 +447,8 @@ textarea.input {
 }
 
 .rep-select {
+  flex: 0 1 auto;
+  min-width: 120px;
   max-width: 240px;
   font-weight: 600;
 }
@@ -1207,10 +1227,32 @@ a {
 
 /* ---------- Responsive ---------- */
 
-@media (max-width: 1100px) {
+/* Make room step by step so the top bar stays on one line on laptop-sized windows. */
+@media (max-width: 1500px) {
+  .brand span {
+    display: none;
+  }
+}
+
+@media (max-width: 1400px) {
+  .profile-pill .pname {
+    display: none;
+  }
+  .profile-pill {
+    padding: 0 6px;
+  }
+}
+
+@media (max-width: 1250px) {
   .nav button span.label {
     display: none;
   }
+  .save-indicator:not(.bad) .label {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
   .tree-layout {
     grid-template-columns: 1fr;
   }
@@ -1251,8 +1293,6 @@ a {
     width: 100%;
   }
   .topbar {
-    flex-wrap: wrap;
-    height: auto;
     padding: 8px 12px;
     gap: 8px;
   }
@@ -1321,8 +1361,3 @@ a.btn {
   color: var(--gap);
 }
 
-@media (max-width: 1100px) {
-  .save-indicator:not(.bad) .label {
-    display: none;
-  }
-}

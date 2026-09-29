@@ -133,66 +133,76 @@ function TopBar() {
 
   return (
     <header className="topbar">
-      <div className="brand">
-        <div className="brand-mark">♞</div>
-        <span>Repertoire</span>
-      </div>
+      {/* Left: identity, selection and navigation. It wraps onto a second line on narrow screens. */}
+      <div className="topbar-left">
+        <div className="brand">
+          <div className="brand-mark">♞</div>
+          <span>Repertoire</span>
+        </div>
 
-      {data.profiles.length > 1 && (
-        <div className="profile-switch">
-          {data.profiles.map((p) => (
-            <button key={p.id} className={`profile-pill ${p.id === data.activeProfileId ? 'on' : ''}`} onClick={() => setActiveProfile(p.id)}>
-              <span className="avatar" style={{ background: p.color }}>
-                {p.name.slice(0, 1).toUpperCase()}
-              </span>
-              {p.name}
+        {data.profiles.length > 1 && (
+          <div className="profile-switch">
+            {data.profiles.map((p) => (
+              <button
+                key={p.id}
+                className={`profile-pill ${p.id === data.activeProfileId ? 'on' : ''}`}
+                onClick={() => setActiveProfile(p.id)}
+                title={p.name}
+              >
+                <span className="avatar" style={{ background: p.color }}>
+                  {p.name.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="pname">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <select
+          className="input rep-select"
+          value={rep?.id ?? ''}
+          onChange={(e) => {
+            if (e.target.value === '__new') setCreating(true);
+            else {
+              setActiveRep(e.target.value);
+              if (view === 'home' || view === 'settings') setView('build');
+            }
+          }}
+        >
+          {!rep && <option value="">Choose a repertoire…</option>}
+          {reps.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.side === 'white' ? '♔' : '♚'} {r.name}
+            </option>
+          ))}
+          <option value="__new">+ New repertoire…</option>
+        </select>
+
+        <nav className="nav">
+          {NAV.map((n) => (
+            <button key={n.view} className={view === n.view ? 'on' : ''} disabled={n.needsRep && !rep} onClick={() => setView(n.view)} title={n.label}>
+              <Icon name={n.icon} size={16} />
+              <span className="label">{n.label}</span>
+              {n.view === 'train' && due > 0 && <span className="badge due">{due}</span>}
             </button>
           ))}
-        </div>
-      )}
+        </nav>
+      </div>
 
-      <select
-        className="input rep-select"
-        value={rep?.id ?? ''}
-        onChange={(e) => {
-          if (e.target.value === '__new') setCreating(true);
-          else {
-            setActiveRep(e.target.value);
-            if (view === 'home' || view === 'settings') setView('build');
-          }
-        }}
-      >
-        {!rep && <option value="">Choose a repertoire…</option>}
-        {reps.map((r) => (
-          <option key={r.id} value={r.id}>
-            {r.side === 'white' ? '♔' : '♚'} {r.name}
-          </option>
-        ))}
-        <option value="__new">+ New repertoire…</option>
-      </select>
-
-      <nav className="nav">
-        {NAV.map((n) => (
-          <button key={n.view} className={view === n.view ? 'on' : ''} disabled={n.needsRep && !rep} onClick={() => setView(n.view)} title={n.label}>
-            <Icon name={n.icon} size={16} />
-            <span className="label">{n.label}</span>
-            {n.view === 'train' && due > 0 && <span className="badge due">{due}</span>}
-          </button>
-        ))}
-      </nav>
-
-      <span className="spacer" />
-      <SaveIndicator />
-      <SyncButton />
-      <button className="btn icon ghost" disabled={!canUndo} onClick={undoLast} title="Undo (Ctrl+Z)">
-        <Icon name="undo" />
-      </button>
-      <button className="btn icon ghost" disabled={!canRedo} onClick={redoLast} title="Redo (Ctrl+Y)">
-        <Icon name="redo" />
-      </button>
-      <button className={`btn icon ${view === 'settings' ? '' : 'ghost'}`} onClick={() => setView('settings')} title="Settings">
-        <Icon name="settings" />
-      </button>
+      {/* Right: always visible, whatever the window width. */}
+      <div className="topbar-right">
+        <SaveIndicator />
+        <SyncButton />
+        <button className="btn icon ghost" disabled={!canUndo} onClick={undoLast} title="Undo (Ctrl+Z)">
+          <Icon name="undo" />
+        </button>
+        <button className="btn icon ghost" disabled={!canRedo} onClick={redoLast} title="Redo (Ctrl+Y)">
+          <Icon name="redo" />
+        </button>
+        <button className={`btn icon ${view === 'settings' ? '' : 'ghost'}`} onClick={() => setView('settings')} title="Settings" aria-label="Settings">
+          <Icon name="settings" />
+        </button>
+      </div>
       {creating && <NewRepertoireDialog onClose={() => setCreating(false)} />}
     </header>
   );

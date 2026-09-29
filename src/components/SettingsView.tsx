@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { googleClientId, preloadGoogle, setClientIdOverride, type DriveFile } from '../lib/drive';
+import { downloadText, safeName } from '../lib/download';
 import { exportPgn, importPgn } from '../lib/pgn';
 import { getLichessUser, getToken, logout, RATING_BUCKETS, ratingLabel, setToken, SPEED_LABELS, SPEEDS, startLogin, verifyToken } from '../lib/lichess';
 import { isMaiaDownloaded, removeMaia } from '../lib/maia';
@@ -8,17 +9,6 @@ import { connectDrive, disconnectDrive, driveBackups, loadDriveBackup, reconnect
 import { activeRep, exportBackup, parseBackup, PROFILE_COLORS, profileRating, useApp, type AppData, type Profile } from '../lib/store';
 import { ChoiceDialog, type Choice } from './Dialog';
 import { Icon } from './Icon';
-
-function download(name: string, text: string, type = 'text/plain') {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-const safeName = (s: string) => s.replace(/[^\w\-. ]+/g, '_').trim() || 'repertoire';
 
 export function timeAgo(t: number | null): string {
   if (!t) return 'never';
@@ -34,7 +24,7 @@ type DialogState = { title: string; body: React.ReactNode; choices: Choice[] } |
 export function SettingsView() {
   const data = useApp((s) => s.data);
   const rep = useApp(activeRep);
-  const { addProfile, updateProfile, deleteProfile, updateRep, renameRepertoire, deleteRepertoire, replaceData, markBackup, showToast } =
+  const { addProfile, updateProfile, deleteProfile, updateRep, renameRepertoire, deleteRepertoire, restoreRepertoire, replaceData, markBackup, showToast } =
     useApp.getState();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [tokenInput, setTokenInput] = useState('');
@@ -202,7 +192,7 @@ export function SettingsView() {
               <input className="input" defaultValue={rep.name} onBlur={(e) => e.target.value.trim() && renameRepertoire(rep.id, e.target.value.trim())} />
             </div>
             <div className="row wrap">
-              <button className="btn" onClick={() => download(`${safeName(rep.name)}.pgn`, exportPgn(rep), 'application/x-chess-pgn')}>
+              <button className="btn" onClick={() => downloadText(`${safeName(rep.name)}.pgn`, exportPgn(rep), 'application/x-chess-pgn')}>
                 <Icon name="download" size={16} /> Export PGN
               </button>
               <label className="btn">
@@ -216,7 +206,16 @@ export function SettingsView() {
                   setDialog({
                     title: `Delete ${rep.name}?`,
                     body: `The whole repertoire (${stats(rep).moves} moves) and its training history are deleted.`,
-                    choices: [{ label: 'Delete', kind: 'danger', run: () => deleteRepertoire(rep.id) }],
+                    choices: [
+                      {
+                        label: 'Delete',
+                        kind: 'danger',
+                        run: () => {
+                          deleteRepertoire(rep.id);
+                          showToast(`Deleted “${rep.name}”`, { label: 'Undo', run: () => restoreRepertoire(rep) });
+                        },
+                      },
+                    ],
                   })
                 }
               >
@@ -243,7 +242,7 @@ export function SettingsView() {
             <button
               className="btn"
               onClick={() => {
-                download(`repertoire-backup-${new Date().toISOString().slice(0, 10)}.json`, exportBackup(data), 'application/json');
+                downloadText(`repertoire-backup-${new Date().toISOString().slice(0, 10)}.json`, exportBackup(data), 'application/json');
                 markBackup();
               }}
             >

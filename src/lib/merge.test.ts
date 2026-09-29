@@ -55,6 +55,16 @@ describe('mergeData', () => {
     expect(mergeData(data({ profiles: [profile('p')], repertoires: [editedAfterDelete] }), deletedLater).repertoires).toHaveLength(1);
   });
 
+  it('keeps a restored repertoire even when another device already holds its deletion mark', () => {
+    const r = rep('r', 'p', ['e4'], 10);
+    const restored = { ...r, updatedAt: 200 }; // restoring bumps the timestamp past the deletion
+    const local = data({ profiles: [profile('p')], repertoires: [restored] });
+    const remote = data({ profiles: [profile('p')], repertoires: [], deleted: { r: 150 } });
+    expect(mergeData(local, remote).repertoires.map((x) => x.id)).toEqual(['r']);
+    // ...and the other way round: the device that only knows the deletion learns about the restored copy.
+    expect(mergeData(remote, local).repertoires.map((x) => x.id)).toEqual(['r']);
+  });
+
   it('drops repertoires whose profile was deleted and keeps the local selection', () => {
     const a = data({ profiles: [profile('p'), profile('q')], repertoires: [rep('r', 'q', ['e4'], 5)], activeProfileId: 'p' });
     const b = data({ profiles: [profile('p')], deleted: { q: 50 }, activeProfileId: 'x' });

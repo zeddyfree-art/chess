@@ -69,6 +69,8 @@ export interface AppState {
   createRepertoire(name: string, side: Side): Repertoire;
   addRepertoire(rep: Repertoire): void;
   deleteRepertoire(id: string): void;
+  /** Undoes a deletion: puts the repertoire back and lifts its deletion mark so sync keeps it. */
+  restoreRepertoire(rep: Repertoire): void;
   renameRepertoire(id: string, name: string): void;
   updateRep(repId: string, fn: (rep: Repertoire) => Repertoire, label: string, opts?: { undoable?: boolean }): void;
   undoLast(): void;
@@ -192,6 +194,21 @@ export const useApp = create<AppState>()((set, get) => {
       const { data } = get();
       set({
         data: fixSelection({ ...data, repertoires: data.repertoires.filter((r) => r.id !== id), deleted: tombstone([id]) }),
+      });
+    },
+
+    restoreRepertoire: (rep) => {
+      const { data } = get();
+      if (data.repertoires.some((r) => r.id === rep.id) || !data.profiles.some((p) => p.id === rep.profileId)) return;
+      const deleted = { ...(data.deleted ?? {}) };
+      delete deleted[rep.id];
+      // Newer than any deletion mark that already reached another device, so the restored copy wins.
+      const restored = { ...rep, updatedAt: Date.now() + 1 };
+      set({
+        data: fixSelection({ ...data, repertoires: [...data.repertoires, restored], deleted, activeProfileId: rep.profileId, activeRepId: rep.id }),
+        line: [],
+        ply: 0,
+        trainScope: null,
       });
     },
 
