@@ -6,7 +6,18 @@ repertoires, see all branches at a glance, prune what you don't need, check your
 against what people at your level actually play (Lichess database), train with spaced repetition (FSRS),
 and play practice games from any position.
 
-Live: <https://zeddyfree-art.github.io/chess/>
+Live: <https://zeddyfree-art.github.io/chess/> · [Privacy Policy](https://zeddyfree-art.github.io/chess/privacy.html) · [Terms of Service](https://zeddyfree-art.github.io/chess/terms.html)
+
+![Build: your prepared move, the Lichess database at your rating, and the engine](docs/screenshots/build.png)
+
+| | |
+| --- | --- |
+| ![Tree: every branch, popularity as line thickness, gaps as red dashed nodes](docs/screenshots/tree.png) | ![Check: gaps in your preparation, sorted by how often you will meet them](docs/screenshots/check.png) |
+| **Tree**: the whole repertoire; red dashed nodes are replies people play that you have not prepared. | **Check**: missing replies sorted by how often you will meet them, plus a coverage percentage. |
+| ![Train: spaced repetition, one card per move you play](docs/screenshots/train.png) | ![Play: a practice game against the human-like Maia-3](docs/screenshots/play.png) |
+| **Train**: spaced repetition; every move you play is a card. | **Play**: a practice game against Maia-3; move tags show where the opponent's moves came from. |
+
+*The screenshots use a demo repertoire and sample database percentages, not live Lichess numbers.*
 
 ## What's inside
 
@@ -99,7 +110,16 @@ src/lib/store.ts        app state (zustand), undo/redo, IndexedDB persistence
 src/components/         React screens: Build, Tree, Train, Play, Check, Overview, Settings
 ```
 
+## Privacy
+
+No account, no server, no analytics: your data stays in your browser, or in your own Google Drive if you connect it.
+See the [Privacy Policy](https://zeddyfree-art.github.io/chess/privacy.html) and [Terms of Service](https://zeddyfree-art.github.io/chess/terms.html) (sources: `public/privacy.html`
+and `public/terms.html`). Contact and bug reports: [GitHub Issues](https://github.com/zeddyfree-art/chess/issues).
+
 ## Licence and credits
+
+The app is free software under the [GNU GPL v3](LICENSE).
+
 
 Built on [chessground](https://github.com/lichess-org/chessground) and [chessops](https://github.com/niklasf/chessops)
 (Lichess), [Stockfish.js](https://github.com/nmrugg/stockfish.js), [Maia-3](https://github.com/CSSLab/maia-platform-frontend)

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy · Repertoire</title>
+  <meta name="description" content="Privacy policy of Repertoire, a free open-source chess opening repertoire app.">
+  <style>
+    :root { --bg:#f4f5f7; --surface:#fff; --ink:#1b1e24; --muted:#5b6371; --line:#dde1e8; --accent:#2f6fd1; --code:#eef1f5; color-scheme: light; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#131519; --surface:#1c1f25; --ink:#e8eaee; --muted:#9fa7b4; --line:#2c3139; --accent:#78a6f2; --code:#242830; color-scheme: dark; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.65 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; padding:24px 16px 64px; }
+    main { max-width: 720px; margin: 0 auto; }
+    nav { display:flex; gap:16px; flex-wrap:wrap; font-size:14px; margin-bottom:28px; }
+    a { color: var(--accent); }
+    h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; }
+    h2 { font-size: 19px; margin: 34px 0 8px; }
+    p, ul { margin: 0 0 12px; }
+    ul { padding-left: 22px; }
+    li { margin-bottom: 6px; }
+    .meta { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+    .summary { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
+    .summary p:last-child { margin-bottom: 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-top: 1px solid var(--line); }
+    th { font-size: 13px; color: var(--muted); font-weight: 600; border-top: 0; }
+    .scroll { overflow-x: auto; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+    footer { margin-top: 40px; color: var(--muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+<main>
+  <nav>
+    <a href="./">← Back to the app</a>
+    <a href="terms.html">Terms of Service</a>
+    <a href="https://github.com/zeddyfree-art/chess" rel="noopener">Source code</a>
+  </nav>
+
+  <h1>Privacy Policy</h1>
+  <p class="meta">Repertoire · Last updated 29 September 2026</p>
+
+  <div class="summary">
+    <p><strong>In short:</strong> Repertoire has no server and no user accounts. It does not collect, receive or sell your personal data, and it has no analytics, advertising or tracking. Your repertoires and settings stay in your own browser. If you choose to connect Google Drive, they are also stored in a folder in <em>your own</em> Drive.</p>
+  </div>
+
+  <h2>Who runs this app</h2>
+  <p>Repertoire (<a href="https://zeddyfree-art.github.io/chess/">zeddyfree-art.github.io/chess</a>) is a free, open-source web app published by <a href="https://github.com/zeddyfree-art">zeddyfree-art</a> on GitHub. The source code is at <a href="https://github.com/zeddyfree-art/chess">github.com/zeddyfree-art/chess</a>. In this policy “we” means the publisher of the app.</p>
+
+  <h2>What is stored, and where</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Data</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Your players (names, colours, ratings), repertoires, notes, engine flags and training progress</td><td>In your browser (IndexedDB) on the device you use. Nothing is sent to us.</td></tr>
+      <tr><td>Settings and preferences (last tab, practice game options, and similar)</td><td>In your browser (localStorage).</td></tr>
+      <tr><td>Lichess login token and username, if you connect Lichess</td><td>In your browser only.</td></tr>
+      <tr><td>Google access token (valid about one hour), the connected account’s email address or name, and sync bookkeeping, if you connect Google Drive</td><td>In your browser only.</td></tr>
+      <tr><td>Cached Lichess database answers and the Maia model, if you use them</td><td>In your browser (IndexedDB).</td></tr>
+      <tr><td>Sync file and daily backups, if you connect Google Drive</td><td>In a folder called “Repertoire app” in your own Google Drive.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="margin-top:12px">We cannot see any of this. There is no database on our side to hold it.</p>
+
+  <h2>Who the app talks to</h2>
+  <p>Your browser connects to these services directly. The connections are only made when the feature is used.</p>
+  <ul>
+    <li><strong>GitHub</strong> hosts the app (GitHub Pages). Like any web host, GitHub receives technical data such as your IP address and browser type when you load the site, under <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener">GitHub’s privacy statement</a>. We do not receive that data. The human-like opponent model may also be downloaded from <code>raw.githubusercontent.com</code>.</li>
+    <li><strong>Lichess</strong> (<code>lichess.org</code>, <code>explorer.lichess.org</code>): to show what is played in the Opening Explorer and to fetch engine evaluations, the app sends chess positions (as FEN text) and your chosen rating and time-control filters. If you log in with Lichess, your access token is sent with those requests. The login itself happens on lichess.org; the app never sees your Lichess password and requests no permissions. See the <a href="https://lichess.org/privacy" rel="noopener">Lichess privacy policy</a>. Positions are sent even when you are not logged in, for engine evaluations.</li>
+    <li><strong>Google</strong> (<code>accounts.google.com</code>, <code>www.googleapis.com</code>): only if you choose “Connect Google Drive”. Before you do, the app makes no request to Google. See <a href="https://policies.google.com/privacy" rel="noopener">Google’s privacy policy</a>.</li>
+  </ul>
+  <p>The chess engine (Stockfish) and the human-like opponent (Maia) run entirely on your device; the positions you analyse or play are not sent anywhere for that.</p>
+
+  <h2>Google Drive</h2>
+  <p>If you connect Google Drive, the app asks for one permission: <code>https://www.googleapis.com/auth/drive.file</code>. It lets the app create and access <em>only the files it created itself</em>. It cannot see your other files.</p>
+  <ul>
+    <li><strong>What we use it for:</strong> to keep a JSON file with your players, repertoires and training progress in sync between your devices, and to store one dated backup per day (the newest 30 are kept). The app also reads the email address or name of the connected Google account, to show you which account is connected.</li>
+    <li><strong>What we do not do:</strong> the data is not sent to us or to anyone else, not read by people, not used for advertising, profiling or analytics, and not sold or shared.</li>
+    <li>The app’s use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>, including its Limited Use requirements.</li>
+  </ul>
+
+  <h2>Cookies and tracking</h2>
+  <p>The app sets no cookies and includes no analytics, advertising or tracking code. It stores data in your browser as described above. When you sign in on the Lichess or Google pages, those services may set their own cookies under their own policies.</p>
+
+  <h2>Your choices and how to delete your data</h2>
+  <ul>
+    <li><strong>Local data:</strong> clear this site’s data in your browser settings, or delete players and repertoires in the app (Settings). You can download a backup file first.</li>
+    <li><strong>Google Drive:</strong> click “Disconnect” in Settings, then delete the “Repertoire app” folder in your Drive. You can also revoke access at <a href="https://myaccount.google.com/permissions" rel="noopener">myaccount.google.com/permissions</a>.</li>
+    <li><strong>Lichess:</strong> click “Disconnect” in Settings (this also revokes the token), or manage tokens at <a href="https://lichess.org/account/security" rel="noopener">lichess.org/account/security</a>.</li>
+    <li><strong>Maia model:</strong> Settings → “Remove from this device”.</li>
+  </ul>
+
+  <h2>Children</h2>
+  <p>The app is for chess players of all ages, and parents may set it up for their children. We do not collect any personal information from anyone, including children. Anything entered (such as a player’s first name) stays on that device or in that person’s own Drive.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If the app changes in a way that affects your privacy, this page is updated and the date above changes. Earlier versions are in the <a href="https://github.com/zeddyfree-art/chess/commits/HEAD/public/privacy.html" rel="noopener">public change history</a>.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or requests: please open an issue at <a href="https://github.com/zeddyfree-art/chess/issues" rel="noopener">github.com/zeddyfree-art/chess/issues</a>.</p>
+
+  <footer>Repertoire is free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" rel="noopener">GNU GPL v3</a>.</footer>
+</main>
+</body>
+</html>

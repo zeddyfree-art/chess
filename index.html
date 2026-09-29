@@ -8,7 +8,15 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Shown until the app has loaded (and to crawlers that do not run JavaScript). -->
+      <main style="max-width:640px;margin:0 auto;padding:48px 16px;font:16px/1.6 system-ui,-apple-system,'Segoe UI',sans-serif;color:#1b1e24">
+        <h1 style="font-size:28px;margin:0 0 8px">Repertoire</h1>
+        <p style="margin:0 0 12px">A free, open-source web app to build, check and train your chess opening repertoire: no move limit, Lichess database and engine checks, spaced-repetition training and practice games against a human-like opponent. Your data stays in your browser or your own Google Drive.</p>
+        <noscript><p><strong>This app needs JavaScript.</strong></p></noscript>
+        <p style="margin:0;font-size:14px"><a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms of Service</a> · <a href="https://github.com/zeddyfree-art/chess">Source code</a></p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

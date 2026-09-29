@@ -38,7 +38,30 @@ Open <https://console.cloud.google.com/apis/library/drive.googleapis.com> and cl
    develop locally. No redirect URIs are needed.
 4. **Create**, and copy the **Client ID** (it ends in `.apps.googleusercontent.com`).
 
-## 5. Decide who may sign in
+## 5. Fill in the branding page (optional, but builds trust)
+
+Under **Branding** the console asks for an app name, support e-mail and, under *App domain*, three links. Use
+these (they are pages of the app itself, so they always match the deployed version):
+
+| Field | Value |
+| --- | --- |
+| Application home page | `https://zeddyfree-art.github.io/chess/` |
+| Application privacy policy link | `https://zeddyfree-art.github.io/chess/privacy.html` |
+| Application terms of service link | `https://zeddyfree-art.github.io/chess/terms.html` |
+| Authorized domains | `zeddyfree-art.github.io` |
+
+Notes:
+
+- The home page must be publicly reachable and must itself link to the privacy policy. The app does this (footer on
+  every screen, and static text for crawlers that don't run JavaScript).
+- Google may ask you to *verify* the authorized domain in Google Search Console. `github.io` sites are special: you can only
+  verify your own subdomain, and only at its root (`https://zeddyfree-art.github.io/`). Project pages such as `/chess/`
+  live below that root, so for verification you would create a small extra repository named exactly
+  `zeddyfree-art.github.io` that contains Google's verification HTML file. Because the app only uses the non-sensitive
+  `drive.file` scope, you can also leave the three link fields and the authorized domain empty and skip verification.
+- The support e-mail on this page is shown to users on the consent screen. Use a dedicated address if you prefer.
+
+## 6. Decide who may sign in
 
 Left menu **Audience**:
 
@@ -46,7 +69,7 @@ Left menu **Audience**:
   (add yourself and your family members).
 - Click **Publish app** to let anyone use it. Because the app only uses `drive.file`, no verification is required.
 
-## 6. Give the client ID to the site
+## 7. Give the client ID to the site
 
 Either of these:
 

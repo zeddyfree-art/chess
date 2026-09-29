@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { googleClientId, setClientIdOverride, type DriveFile } from '../lib/drive';
+import { googleClientId, preloadGoogle, setClientIdOverride, type DriveFile } from '../lib/drive';
 import { exportPgn, importPgn } from '../lib/pgn';
 import { getLichessUser, getToken, logout, RATING_BUCKETS, ratingLabel, setToken, SPEED_LABELS, SPEEDS, startLogin, verifyToken } from '../lib/lichess';
 import { isMaiaDownloaded, removeMaia } from '../lib/maia';
@@ -260,6 +260,29 @@ export function SettingsView() {
 
       <MaiaCard />
 
+      <div className="card">
+        <div className="section">
+          <h2>About</h2>
+        </div>
+        <div className="section stack" style={{ gap: 8 }}>
+          <div className="help">
+            Repertoire is free, open-source software (GPL-3.0). Built on Lichess’ chessground and chessops, Stockfish, Maia-3
+            (CSSLab, University of Toronto), ONNX Runtime and FSRS. No account, no tracking: your data stays in your browser
+            or in your own Google Drive.
+          </div>
+          <div className="row wrap small">
+            <a href="privacy.html">Privacy Policy</a>
+            <a href="terms.html">Terms of Service</a>
+            <a href="https://github.com/zeddyfree-art/chess" target="_blank" rel="noreferrer">
+              Source code
+            </a>
+            <a href="https://github.com/zeddyfree-art/chess/issues" target="_blank" rel="noreferrer">
+              Report a problem
+            </a>
+          </div>
+        </div>
+      </div>
+
       {dialog && <ChoiceDialog {...dialog} onClose={() => setDialog(null)} />}
     </div>
   );
@@ -328,7 +351,7 @@ function SyncCard({ onRestore }: { onRestore: (d: AppData, source: string) => vo
           </div>
         ) : !connected ? (
           <div className="row">
-            <button className="btn primary" disabled={busy} onClick={() => run(connectDrive)}>
+            <button className="btn primary" disabled={busy} onPointerEnter={preloadGoogle} onFocus={preloadGoogle} onClick={() => run(connectDrive)}>
               <Icon name="cloud" size={16} /> Connect Google Drive
             </button>
           </div>

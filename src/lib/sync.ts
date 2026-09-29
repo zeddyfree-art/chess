@@ -88,7 +88,9 @@ function idleStatus(): SyncStatus {
 export function initSync() {
   const meta = readMeta();
   setStatus({ status: idleStatus(), account: meta.account ?? null });
-  preloadGoogle();
+  // Only devices that are already connected talk to Google on startup; everyone else loads the
+  // Google script when they hover over or focus a "Connect" button (see preloadGoogle).
+  if (meta.connected) preloadGoogle();
 
   let last = useApp.getState().data;
   useApp.subscribe((s) => {

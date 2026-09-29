@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AuditView } from './components/AuditView';
+import { Footer } from './components/Footer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BuildView } from './components/BuildView';
 import { HomeView, NewRepertoireDialog } from './components/HomeView';
@@ -8,7 +9,7 @@ import { PlayView } from './components/PlayView';
 import { SettingsView } from './components/SettingsView';
 import { TrainView } from './components/TrainView';
 import { TreeView } from './components/TreeView';
-import { googleClientId } from './lib/drive';
+import { googleClientId, preloadGoogle } from './lib/drive';
 import { useKey } from './lib/hooks';
 import { counts } from './lib/srs';
 import { activeRep, PROFILE_COLORS, useApp, type View } from './lib/store';
@@ -64,6 +65,7 @@ export function App() {
           {content}
         </ErrorBoundary>
       </main>
+      <Footer />
       {toast && (
         <div className="toast" role="status">
           <span>{toast.message}</span>
@@ -237,8 +239,8 @@ function Onboarding() {
     setPeople((ps) => ps.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
   return (
-    <div style={{ minHeight: '100%', display: 'grid', placeItems: 'center', padding: 16 }}>
-      <div className="card card-pad stack" style={{ width: 'min(560px, 100%)', gap: 16 }}>
+    <div style={{ minHeight: '100%', display: 'grid', gridTemplateRows: '1fr auto', padding: 16 }}>
+      <div className="card card-pad stack" style={{ width: 'min(560px, 100%)', gap: 16, alignSelf: 'center', justifySelf: 'center' }}>
         <div className="row">
           <div className="brand-mark" style={{ width: 40, height: 40, fontSize: 26 }}>
             ♞
@@ -295,13 +297,14 @@ function Onboarding() {
           <div className="stack" style={{ gap: 8, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
             <div className="help">Already using this app on another device?</div>
             <div>
-              <button className="btn" disabled={loading} onClick={loadFromDrive}>
+              <button className="btn" disabled={loading} onPointerEnter={preloadGoogle} onFocus={preloadGoogle} onClick={loadFromDrive}>
                 <Icon name="cloud" size={16} /> {loading ? 'Loading…' : 'Load my data from Google Drive'}
               </button>
             </div>
           </div>
         )}
       </div>
+      <Footer className="site-footer static" />
     </div>
   );
 }
