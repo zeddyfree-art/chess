@@ -82,9 +82,17 @@ Shift or Ctrl gives red, Alt gives blue, both give yellow; drawing the same thin
 position, so they follow transpositions, are saved and synced like everything else, are undoable (Ctrl+Z) and are exported to
 PGN. A click on the board never wipes them. (There is no drawing on touch screens yet; imported drawings show everywhere.)
 
+**Annotation symbols.** The `$1`, `$14`, `!`, `?!` codes (NAGs) are kept per move and shown behind it: `e5!` for the move
+rating (`!!` `!` `!?` `?!` `?` `??`), then the position rating (`+−` `±` `+/=` `=` `∞` `=/+` `∓` `−+`) and others such as `N` (novelty).
+Use the `!?` button above the moves to set them yourself; they are written back on export. Unknown codes are kept as `$n`.
+
+**Also understood.** Comments before the first move (kept as the note and drawings of the start position), arrows written as
+`[%cal Ge2e4, Rd7d5]` with spaces, castling written as `0-0`, `;` comments, Lichess "From Position" games. Exports contain all
+seven mandatory tags.
+
 **What is not imported.** Chessable's setup chapters that use a pass move (`1. d4 -- 2. Nc3 --`, the opponent "does nothing") cannot
-be represented in a repertoire of real games; the app tells you how many lines were cut at a pass. Clock and evaluation
-annotations, Chessable's internal `[%mdl …]` codes and chess variants are ignored.
+be represented in a repertoire of real games; the app tells you how many lines were cut at a pass. Clocks (`[%clk]`), engine evaluations
+(`[%eval]`), Chessable's internal `[%mdl …]` codes and chess variants such as Chess960 or Atomic are ignored.
 
 ## The Lichess database
 
@@ -133,6 +141,7 @@ src/lib/repertoire.ts   data model and pure operations: add, delete + clean up, 
 src/lib/srs.ts          FSRS cards (ts-fsrs), training queue in tree order
 src/lib/pgn.ts          PGN import (into an existing repertoire, with comments and drawings) and export
 src/lib/shapes.ts       arrows and circles as PGN tokens ("Gc3b5"), conversions to chessground and chessops
+src/lib/nags.ts         annotation symbols ($1 = "!", $14 = "+/=" …): table, merging, picker logic
 src/lib/lichess.ts      Opening Explorer, cloud eval, Lichess OAuth PKCE, request queue + cache
 src/lib/engine.ts       Stockfish worker (UCI, MultiPV); evaluate.ts: cloud first, local fallback
 src/lib/audit.ts        gap/coverage analysis and engine check

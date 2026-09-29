@@ -16,6 +16,7 @@ import {
   type Repertoire,
   type TreeNode,
 } from '../lib/repertoire';
+import { nagText, nagTitle } from '../lib/nags';
 import { tokensToShapes } from '../lib/shapes';
 import { State } from '../lib/srs';
 import { activeProfile, activeRep, useApp, type Profile } from '../lib/store';
@@ -539,7 +540,9 @@ function NodeDetails({
   visit(node);
   const share = node.mine ? undefined : shareOf(explorerFor(profile, node.from), node.san);
   const flag = rep.engine[node.id];
-  const comment = movesAt(rep, node.from).find((m) => m.uci === node.uci)?.comment;
+  const edge = movesAt(rep, node.from).find((m) => m.uci === node.uci);
+  const comment = edge?.comment;
+  const symbols = nagText(edge?.nags);
   const { trainFrom, playFrom } = useApp.getState();
 
   return (
@@ -559,6 +562,11 @@ function NodeDetails({
         {flag && lossLabel(flag.loss).tone !== 'ok' && (
           <span className="badge gap">
             −{(flag.loss / 100).toFixed(1)} · better {flag.bestSan}
+          </span>
+        )}
+        {(symbols.move || symbols.rest) && (
+          <span className="badge" title={nagTitle(edge?.nags)}>
+            {symbols.move} {symbols.rest}
           </span>
         )}
         {node.transposition && <span className="badge">transposition</span>}

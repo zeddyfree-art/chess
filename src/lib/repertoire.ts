@@ -8,6 +8,8 @@ export interface RepMove {
   uci: string;
   to: string;
   comment?: string;
+  /** PGN annotation glyphs ($1 = "!", $14 = "+/=", …); see nags.ts. */
+  nags?: number[];
   addedAt: number;
 }
 
@@ -100,6 +102,15 @@ export function addLine(rep: Repertoire, line: PlayedMove[]): Repertoire {
 
 export function setMoveComment(rep: Repertoire, from: string, uci: string, comment: string): Repertoire {
   const moves = movesAt(rep, from).map((m) => (m.uci === uci ? { ...m, comment: comment || undefined } : m));
+  return { ...rep, positions: { ...rep.positions, [from]: moves }, updatedAt: Date.now() };
+}
+
+export function setMoveNags(rep: Repertoire, from: string, uci: string, nags: readonly number[]): Repertoire {
+  const moves = movesAt(rep, from).map((m) => {
+    if (m.uci !== uci) return m;
+    const { nags: _old, ...rest } = m;
+    return nags.length ? { ...rest, nags: [...nags] } : rest;
+  });
   return { ...rep, positions: { ...rep.positions, [from]: moves }, updatedAt: Date.now() };
 }
 

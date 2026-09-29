@@ -1,8 +1,9 @@
 // PGN import (with variations, e.g. a Chessbook, Chessable or Lichess-study export) and export.
 // Comments keep their arrows and circles ([%cal …] / [%csl …]) in both directions.
-import { ChildNode, defaultGame, makeComment, makePgn, parseComment, parsePgn, startingPosition, type Game, type Node, type PgnNodeData } from 'chessops/pgn';
+import { ChildNode, defaultGame, defaultHeaders, makeComment, makePgn, parseComment, parsePgn, startingPosition, type Game, type Node, type PgnNodeData } from 'chessops/pgn';
 import type { Chess } from 'chessops/chess';
 import { keyOfPos, playSan, turnOfKey, type PlayedMove } from './chess';
+import { mergeNags, cleanNags } from './nags';
 import { movesAt, reachable, ROOT, type RepMove, type Repertoire } from './repertoire';
 import { cleanCommentText, commentShapesToTokens, mergeTokens, tokensToCommentShapes } from './shapes';
 
@@ -27,6 +28,8 @@ export interface ImportResult {
   comments: number;
   /** New arrows and circles. */
   drawings: number;
+  /** New annotation symbols (!, ?!, ±, …). */
+  symbols: number;
   /** Moves of your own added next to a different move of yours that the repertoire already had. */
   alternatives: number;
   /** Imported moves (with their branches) skipped because you already play something else there. */
@@ -69,6 +72,7 @@ export function importGames(rep: Repertoire, games: Game<PgnNodeData>[], opts: I
   let alreadyHad = 0;
   let comments = 0;
   let drawings = 0;
+  let symbols = 0;
   let alternatives = 0;
   let skippedConflicts = 0;
   let skippedGames = 0;
@@ -79,6 +83,28 @@ export function importGames(rep: Repertoire, games: Game<PgnNodeData>[], opts: I
       owned.add(key);
     }
     return positions[key];
+  };
+
+  // Comments before the first move belong to the position the game starts from.
+  let notes: Record<string, string> | undefined;
+  const addStartComment = (key: string, raw: string) => {
+    const parsed = parseComment(tidyShapes(raw));
+    const tokens = commentShapesToTokens(parsed.shapes);
+    if (tokens.length) {
+      shapes ??= { ...rep.shapes };
+      const merged = mergeTokens(shapes[key], tokens);
+      const gained = merged.length - (shapes[key]?.length ?? 0);
+      if (gained > 0) {
+        shapes[key] = merged;
+        drawings += gained;
+      }
+    }
+    const text = cleanCommentText(parsed.text);
+    if (text && !(notes ?? rep.notes)[key]) {
+      notes ??= { ...rep.notes };
+      notes[key] = text;
+      comments++;
+    }
   };
 
   const visit = (node: Node<PgnNodeData>, from: string) => {
@@ -113,25 +139,37 @@ export function importGames(rep: Repertoire, games: Game<PgnNodeData>[], opts: I
       let text = '';
       let tokens: string[] = [];
       for (const c of child.data.comments ?? []) {
-        const parsed = parseComment(c);
+        const parsed = parseComment(tidyShapes(c));
         if (parsed.shapes.length) tokens = tokens.concat(commentShapesToTokens(parsed.shapes));
         const t = cleanCommentText(parsed.text);
         // "transposition" is the marker our own export puts where a line continues elsewhere.
         if (t && t !== 'transposition') text = text ? `${text}\n\n${t}` : t;
       }
 
+      const nags = cleanNags(child.data.nags);
       if (!known) {
         if (clash) alternatives++;
-        own(from).push({ san: step.san, uci: step.uci, to: step.to, ...(text ? { comment: text } : {}), addedAt: now });
+        own(from).push({
+          san: step.san,
+          uci: step.uci,
+          to: step.to,
+          ...(text ? { comment: text } : {}),
+          ...(nags.length ? { nags } : {}),
+          addedAt: now,
+        });
         added++;
         if (text) comments++;
+        symbols += nags.length;
       } else {
         if (firstVisit) alreadyHad++;
-        if (text && !known.comment) {
+        const newNags = nags.length ? mergeNags(known.nags, nags) : undefined;
+        const gainedNags = newNags ? newNags.length - (known.nags?.length ?? 0) : 0;
+        if ((text && !known.comment) || gainedNags > 0) {
           const moves = own(from);
           const i = moves.findIndex((m) => m.uci === step.uci);
-          moves[i] = { ...moves[i], comment: text };
-          comments++;
+          moves[i] = { ...moves[i], ...(text && !known.comment ? { comment: text } : {}), ...(gainedNags > 0 ? { nags: newNags } : {}) };
+          if (text && !known.comment) comments++;
+          symbols += Math.max(0, gainedNags);
         }
       }
       seen.add(edge);
@@ -151,7 +189,7 @@ export function importGames(rep: Repertoire, games: Game<PgnNodeData>[], opts: I
 
   for (const game of games) {
     const variant = game.headers.get('Variant');
-    if (variant && !/^(standard|chess)$/i.test(variant)) {
+    if (variant && !/^(standard|chess|from position)$/i.test(variant)) {
       skippedGames++;
       warn('variant', variant);
       continue;
@@ -168,6 +206,7 @@ export function importGames(rep: Repertoire, games: Game<PgnNodeData>[], opts: I
       warn('elsewhere');
       continue;
     }
+    for (const c of game.comments ?? []) addStartComment(startKey, c);
     visit(game.moves, startKey);
   }
 
@@ -184,9 +223,15 @@ export function importGames(rep: Repertoire, games: Game<PgnNodeData>[], opts: I
   }
   if (!games.length) errors.push('No PGN games found.');
 
-  const changed = added > 0 || comments > 0 || drawings > 0;
-  const next: Repertoire = changed ? { ...rep, positions, ...(shapes ? { shapes } : {}), updatedAt: now } : rep;
-  return { rep: next, games: games.length, added, alreadyHad, found: seen.size + skipped.size, comments, drawings, alternatives, skippedConflicts, skippedGames, errors };
+  const changed = added > 0 || comments > 0 || drawings > 0 || symbols > 0;
+  const next: Repertoire = changed ? { ...rep, positions, ...(notes ? { notes } : {}), ...(shapes ? { shapes } : {}), updatedAt: now } : rep;
+  return { rep: next, games: games.length, added, alreadyHad, found: seen.size + skipped.size, comments, drawings, symbols, alternatives, skippedConflicts, skippedGames, errors };
+}
+
+/** Some programs write "[%cal Ge2e4, Rd7d5]" with spaces; chessops only reads the commas-only form. */
+function tidyShapes(comment: string): string {
+  if (!comment.includes('[%c')) return comment;
+  return comment.replace(/\[%(cal|csl)\s+([^\]]*)\]/g, (_, cmd: string, body: string) => `[%${cmd} ${body.replace(/\s*,\s*/g, ',').trim()}]`);
 }
 
 /** PGN comments end at the first closing brace. */
@@ -195,16 +240,15 @@ const safe = (text: string) => text.replace(/}/g, ')');
 /** One PGN game with all lines as variations. Transpositions are cut off with a comment,
  *  because the continuation is already written out elsewhere in the file. */
 export function exportPgn(rep: Repertoire): string {
-  const game = defaultGame<PgnNodeData>(
-    () =>
-      new Map([
-        ['Event', rep.name],
-        ['Site', 'Repertoire'],
-        ['White', rep.side === 'white' ? 'Repertoire' : '?'],
-        ['Black', rep.side === 'black' ? 'Repertoire' : '?'],
-        ['Result', '*'],
-      ]),
-  );
+  // All seven mandatory tags (Event, Site, Date, Round, White, Black, Result), so every program accepts the file.
+  const game = defaultGame<PgnNodeData>(() => {
+    const headers = defaultHeaders();
+    headers.set('Event', rep.name);
+    headers.set('Site', 'Repertoire');
+    headers.set('White', rep.side === 'white' ? 'Repertoire' : '?');
+    headers.set('Black', rep.side === 'black' ? 'Repertoire' : '?');
+    return headers;
+  });
   const expanded = new Set<string>([ROOT]);
   const build = (parent: Node<PgnNodeData>, key: string) => {
     for (const m of movesAt(rep, key)) {
@@ -214,7 +258,11 @@ export function exportPgn(rep: Repertoire): string {
       if (m.comment || shapes.length) comments.push(safe(makeComment({ text: m.comment ?? '', shapes })));
       if (!transposition && rep.notes[m.to]) comments.push(safe(rep.notes[m.to]));
       if (transposition) comments.push('transposition');
-      const child = new ChildNode<PgnNodeData>({ san: m.san, comments: comments.length ? comments : undefined });
+      const child = new ChildNode<PgnNodeData>({
+        san: m.san,
+        nags: m.nags?.length ? m.nags : undefined,
+        comments: comments.length ? comments : undefined,
+      });
       parent.children.push(child);
       if (!transposition) {
         expanded.add(m.to);

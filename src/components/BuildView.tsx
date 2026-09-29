@@ -15,6 +15,7 @@ import {
   reachable,
   ROOT,
   setMoveComment,
+  setMoveNags,
   setNote,
   setShapes,
   toMoves,
@@ -22,6 +23,7 @@ import {
   type RepMove,
 } from '../lib/repertoire';
 import { State } from '../lib/srs';
+import { MOVE_NAGS, nagInfo, nagText, nagTitle, POSITION_NAGS, toggleNag } from '../lib/nags';
 import { shapesToTokens, tokensToShapes } from '../lib/shapes';
 import { activeProfile, activeRep, useApp } from '../lib/store';
 import { Board, type Shape } from './Board';
@@ -409,7 +411,8 @@ function LineBar({ line, ply, rep, onJump }: { line: PlayedMove[]; ply: number; 
   return (
     <div className="line-bar section">
       {line.map((m, i) => {
-        const saved = !!findMove(rep, m.from, m.uci);
+        const edge = findMove(rep, m.from, m.uci);
+        const saved = !!edge;
         return (
           <span key={i} style={{ display: 'contents' }}>
             {i % 2 === 0 && <span className="mn">{moveNumber(i)}</span>}
@@ -418,10 +421,45 @@ function LineBar({ line, ply, rep, onJump }: { line: PlayedMove[]; ply: number; 
               onClick={() => onJump(i + 1)}
             >
               {m.san}
+              {nagText(edge?.nags).move}
             </button>
           </span>
         );
       })}
+    </div>
+  );
+}
+
+/** A move's annotation symbols: "!?" and the like, then the position symbols ("±"). */
+function Nags({ nags }: { nags?: number[] }) {
+  const t = nagText(nags);
+  if (!t.move && !t.rest) return null;
+  return (
+    <span className="nag" title={nagTitle(nags)}>
+      {t.move}
+      {t.move && t.rest ? ' ' : ''}
+      {t.rest}
+    </span>
+  );
+}
+
+/** Buttons for the symbols of one move; choosing one replaces the other of its kind. */
+function NagPicker({ nags, onChange }: { nags: number[]; onChange: (next: number[]) => void }) {
+  const button = (n: number) => (
+    <button key={n} className="btn sm" aria-pressed={nags.includes(n)} title={nagInfo(n).text} onClick={() => onChange(toggleNag(nags, n))}>
+      {nagInfo(n).symbol}
+    </button>
+  );
+  return (
+    <div className="nag-picker">
+      <div className="row wrap" style={{ gap: 4 }}>
+        <span className="small muted">Move</span>
+        {MOVE_NAGS.map(button)}
+      </div>
+      <div className="row wrap" style={{ gap: 4 }}>
+        <span className="small muted">Position</span>
+        {POSITION_NAGS.map(button)}
+      </div>
     </div>
   );
 }
@@ -485,6 +523,7 @@ function RepMoves({
           <div key={m.uci} className={`rep-move ${mine ? 'mine' : 'opp'}`}>
             <span className="san" onClick={() => onPlay(m.san)} title="Play this move">
               {m.san}
+              <Nags nags={m.nags} />
               {label?.symbol && (
                 <span style={{ color: 'var(--gap)' }} title={`Engine: ${(flag!.loss / 100).toFixed(1)} pawns worse than ${flag!.bestSan}`}>
                   {label.symbol}
@@ -579,6 +618,7 @@ function ArrivalComment({ rep, move, ply }: { rep: Repertoire; move: PlayedMove;
   const updateRep = useApp((s) => s.updateRep);
   const saved = findMove(rep, move.from, move.uci);
   const [editing, setEditing] = useState(false);
+  const [symbols, setSymbols] = useState(false);
   useEffect(() => {
     setEditing(false);
   }, [move.from, move.uci]);
@@ -586,14 +626,31 @@ function ArrivalComment({ rep, move, ply }: { rep: Repertoire; move: PlayedMove;
   return (
     <div className="section stack arrival" style={{ gap: 6 }}>
       <div className="row" style={{ gap: 8 }}>
-        <span className="arrival-move">{moveNumber(ply - 1, true)} {saved.san}</span>
+        <span className="arrival-move">
+          {moveNumber(ply - 1, true)} {saved.san}
+          <Nags nags={saved.nags} />
+        </span>
         <span className="spacer" />
+        <button
+          className="btn sm ghost"
+          aria-pressed={symbols}
+          onClick={() => setSymbols((v) => !v)}
+          title="Annotation symbols: !, ?!, ±, …"
+        >
+          !?
+        </button>
         {!editing && (
           <button className="btn sm ghost" onClick={() => setEditing(true)} title={saved.comment ? 'Edit this comment' : 'Comment on this move'}>
             <Icon name="comment" size={14} /> {saved.comment ? 'Edit' : 'Add comment'}
           </button>
         )}
       </div>
+      {symbols && (
+        <NagPicker
+          nags={saved.nags ?? []}
+          onChange={(next) => updateRep(rep.id, (r) => setMoveNags(r, move.from, move.uci, next), 'symbol', { coalesce: `nags:${move.from}|${move.uci}` })}
+        />
+      )}
       {editing ? (
         <CommentEditor
           initial={saved.comment ?? ''}

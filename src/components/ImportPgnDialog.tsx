@@ -75,7 +75,7 @@ export function ImportPgnDialog({ rep, onClose }: { rep: Repertoire; onClose: ()
     }
   };
 
-  const changes = result ? result.added + result.comments + result.drawings : 0;
+  const changes = result ? result.added + result.comments + result.drawings + result.symbols : 0;
 
   const add = () => {
     if (!result || !games.current) return;
@@ -94,6 +94,7 @@ export function ImportPgnDialog({ rep, onClose }: { rep: Repertoire; onClose: ()
     const parts = [plural(toMoves(done.added), 'move')];
     if (done.comments) parts.push(plural(done.comments, 'comment'));
     if (done.drawings) parts.push(plural(done.drawings, 'arrow or circle', 'arrows and circles'));
+    if (done.symbols) parts.push(plural(done.symbols, 'symbol'));
     showToast(`Added ${parts.join(', ')}`, { label: 'Undo', run: undoLast });
     onClose();
   };
@@ -173,6 +174,12 @@ export function ImportPgnDialog({ rep, onClose }: { rep: Repertoire; onClose: ()
               <b>{count(result.drawings)}</b>
               <span>arrows &amp; circles</span>
             </div>
+            {result.symbols > 0 && (
+              <div className="stat" title="Annotation symbols such as !, ?! and ±">
+                <b>{count(result.symbols)}</b>
+                <span>symbols</span>
+              </div>
+            )}
             <div className="stat" title={`${count(result.alreadyHad)} half-moves`}>
               <b>{count(toMoves(result.alreadyHad))}</b>
               <span>already there</span>
@@ -223,7 +230,7 @@ export function ImportPgnDialog({ rep, onClose }: { rep: Repertoire; onClose: ()
           Cancel
         </button>
         <button className="btn primary" disabled={!result || busy || changes === 0} onClick={add}>
-          {result && changes > 0 ? (result.added > 0 ? `Add ${plural(toMoves(result.added), 'move')}` : 'Add comments & drawings') : 'Add'}
+          {result && changes > 0 ? (result.added > 0 ? `Add ${plural(toMoves(result.added), 'move')}` : 'Add comments & symbols') : 'Add'}
         </button>
       </div>
     </Dialog>

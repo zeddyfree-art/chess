@@ -1447,3 +1447,26 @@ a.btn {
 .field > label.radio {
   font-weight: 400;
 }
+
+.btn[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.nag {
+  margin-left: 4px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.nag-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nag-picker .small {
+  min-width: 56px;
+}
