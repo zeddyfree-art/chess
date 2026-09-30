@@ -24,7 +24,7 @@ Live: <https://zeddyfree-art.github.io/chess/> · [Privacy Policy](https://zeddy
 | Screen | What you do there |
 | --- | --- |
 | **Overview** | The active player's repertoires with their size and what is due today. Sizes are counted like books and PGN do: one **move** is White's move plus Black's reply (1.e4 e5 is one move); hover a number for the half-moves, your own moves and line lengths. Each card has **Download** (PGN), **Add lines from a PGN** (paste or file) and **Delete** (with confirmation and an Undo). |
-| **Build** | Board plus the current line. Moves you play are a *proposal* (dashed blue) until you **Save** (Enter) or **Discard** (Esc). Next to it: your prepared moves in this position (with number of follow-up moves, comments, ★ main move, delete), a note per position, and tabs **Lichess games**, **Masters** and **Engine**. **Train from here** and **Play from here** start from the position on the board. Imported comments and arrows/circles show here; you can draw your own (see below). |
+| **Build** | Board plus the current line. Moves you play are a *proposal* (dashed blue) until you **Save** (Enter) or **Discard** (Esc). Next to it: your prepared moves in this position (○ White / ● Black, with number of follow-up moves, comments, ★ main move, delete), a note per position, and tabs **Lichess games**, **Masters** and **Engine**. **Train from here** and **Play from here** start from the position on the board. Imported comments and arrows/circles show here; you can draw your own (see below). |
 | **Tree** | The whole repertoire as a diagram. Green = your move, outlined = opponent move with how often it is played; line thickness = popularity; red dashed nodes = **gaps** (played often, not prepared). Collapse/expand per branch or to a depth, highlight due / dubious / rare moves. Select a node to open it, train or play from it, or **Prune branch** (Delete) — you see beforehand how many moves and cards disappear, and everything can be undone (Ctrl+Z). |
 | **Train** | FSRS spaced repetition: each move you play is a card. New moves are shown first and quizzed again later in the session. **Practice lines** plays random lines through without affecting the schedule. Scoped to one branch when started with *Train from here* (review, drill the whole branch, or practice lines). |
 | **Play** | Practice games against **Maia-3**, a human-like neural network, at any strength from 600 to 2600. In the opening it plays what people at that level actually play (Lichess database) or sticks to your prepared lines; afterwards it plays like a human of that rating. Tells you when you (or it) leave your repertoire; take back, copy PGN, analyse on Lichess, or open the game in Build to add moves. |
@@ -84,6 +84,11 @@ and `[%csl Rc7]` (circles), with the colours G/R/B/Y. The app reads them, shows 
   a book explains the position you are looking at); the eye button hides or shows the drawings, ✕ clears them;
 - in **Tree** for the selected or hovered move, and in **Train** while a new move is being taught (not during review, so
   they do not give the answer away).
+
+**The app's own arrows never look like annotations.** PGN only knows green, red, blue and yellow, so prepared moves are
+drawn in white or black (the side that plays them) and run *under* the pieces; in a position that has annotations they are
+softer still, so the author's arrows and circles stand out. The engine's best move is violet, a database move you point at
+is pink. The move list uses the same ○ White / ● Black marks.
 
 **Draw your own, like on Lichess.** Right-click and drag on the Build board for an arrow, right-click a square for a circle;
 Shift or Ctrl gives red, Alt gives blue, both give yellow; drawing the same thing again removes it. Drawings belong to the

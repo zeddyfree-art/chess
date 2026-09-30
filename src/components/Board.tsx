@@ -1,11 +1,46 @@
 import { useEffect, useRef } from 'react';
 import { Chessground } from '@lichess-org/chessground';
 import type { Api } from '@lichess-org/chessground/api';
-import type { DrawShape } from '@lichess-org/chessground/draw';
+import type { DrawBrush, DrawShape } from '@lichess-org/chessground/draw';
 import type { Key } from '@lichess-org/chessground/types';
-import { dests, isCheck, keyToFen, turnOfKey, type Side } from '../lib/chess';
+import { dests, isCheck, keyToFen, turnOfKey, uciToArrow, type Side } from '../lib/chess';
 
 export type Shape = DrawShape;
+
+/** Colours of the arrows the app draws itself. PGN annotations ([%cal]/[%csl] from Lichess, Chessable,
+ *  ChessBase) only know green, red, blue and yellow, so the app never uses those: moves are white or black
+ *  after the side that plays them and run under the pieces like a trail, so annotations stay on top; the
+ *  engine's move is violet and a move you point at in the database is pink. */
+/** Thin dark edge that keeps white arrows and circles visible on the light squares. */
+const WHITE_EDGE = '#6b6252';
+
+const APP_BRUSHES: Record<string, DrawBrush> = {
+  moveWhite: { key: 'mw', color: '#ffffff', opacity: 0.85, lineWidth: 12 },
+  moveBlack: { key: 'mb', color: '#000000', opacity: 0.55, lineWidth: 12 },
+  moveWhiteSoft: { key: 'mws', color: '#ffffff', opacity: 0.5, lineWidth: 12 },
+  moveBlackSoft: { key: 'mbs', color: '#000000', opacity: 0.3, lineWidth: 12 },
+  engine: { key: 'eng', color: '#7a3db8', opacity: 0.6, lineWidth: 12 },
+  pointer: { key: 'ptr', color: '#e0457b', opacity: 0.75, lineWidth: 10 },
+};
+
+/** A move as an arrow in the colour of the side that plays it. `soft` when the position has annotations
+ *  (they should stand out), `onTop` to draw it over the pieces instead of under them. */
+export function moveArrow(uci: string, side: Side, opts: { soft?: boolean; width?: number; onTop?: boolean } = {}): Shape {
+  const [orig, dest] = uciToArrow(uci);
+  const brush = `move${side === 'white' ? 'White' : 'Black'}${opts.soft ? 'Soft' : ''}`;
+  return {
+    orig,
+    dest,
+    brush,
+    modifiers: { ...(opts.width ? { lineWidth: opts.width } : {}), ...(side === 'white' ? { hilite: WHITE_EDGE } : {}) },
+    ...(opts.onTop ? {} : { below: true }),
+  } as Shape;
+}
+
+/** A circle around a square in the colour of a side (e.g. the piece to move, as a hint). */
+export function sideCircle(square: string, side: Side): Shape {
+  return { orig: square, brush: side === 'white' ? 'moveWhite' : 'moveBlack', modifiers: { hilite: side === 'white' ? WHITE_EDGE : '#ffffff' } } as Shape;
+}
 
 interface Props {
   /** Position key (FEN without counters). */
@@ -72,6 +107,7 @@ export function Board({ position, orientation, movable, lastMove, shapes, drawn,
       drawable: {
         enabled: true,
         visible: true,
+        brushes: APP_BRUSHES as never,
         eraseOnMovablePieceClick: false,
         onChange: (all) => {
           if (drawing.current) onDrawRef.current?.([...all]);

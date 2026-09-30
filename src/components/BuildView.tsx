@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { moveFromBoard, moveNumber, playSan, uciToArrow, type PlayedMove, type Side } from '../lib/chess';
+import { moveFromBoard, moveNumber, playSan, turnOfKey, uciToArrow, type PlayedMove, type Side } from '../lib/chess';
 import { lossLabel } from '../lib/audit';
 import { useEvaluation, useExplorer, useKey } from '../lib/hooks';
 import {
@@ -26,7 +26,7 @@ import { State } from '../lib/srs';
 import { MOVE_NAGS, nagInfo, nagText, nagTitle, POSITION_NAGS, toggleNag } from '../lib/nags';
 import { shapesToTokens, tokensToShapes } from '../lib/shapes';
 import { activeProfile, activeRep, useApp } from '../lib/store';
-import { Board, type Shape } from './Board';
+import { Board, moveArrow, type Shape } from './Board';
 import { ChoiceDialog, type Choice } from './Dialog';
 import { EnginePanel, EvalBar } from './EnginePanel';
 import { ExplorerPanel } from './ExplorerPanel';
@@ -116,23 +116,24 @@ export function BuildView() {
   };
   const arrival = ply > 0 ? line[ply - 1] : null;
 
+  // Prepared moves in the colour of the side to move, under the pieces; softer when the position has
+  // annotations, so the author's arrows and circles stand out.
+  const annotated = showDrawings && !!stored?.length;
   const shapes = useMemo<Shape[]>(() => {
-    const s: Shape[] = repMoves.map((m) => {
-      const [orig, dest] = uciToArrow(m.uci);
-      return { orig, dest, brush: mine ? 'green' : 'blue', modifiers: { lineWidth: mine ? 10 : 7 } } as Shape;
-    });
+    const turn = turnOfKey(key);
+    const s: Shape[] = repMoves.map((m) => moveArrow(m.uci, turn, { soft: annotated, width: mine ? 12 : 9 }));
     if (tab === 'engine' && engineOn && evaluation?.lines[0]?.uci[0]) {
       const [orig, dest] = uciToArrow(evaluation.lines[0].uci[0]);
-      s.push({ orig, dest, brush: 'paleBlue' } as Shape);
+      s.push({ orig, dest, brush: 'engine' } as Shape);
     }
     if (hover) {
       const played = explorer.data?.moves.find((m) => m.uci === hover);
       const uci = played ? (playSan(key, played.san)?.uci ?? hover) : hover;
       const [orig, dest] = uciToArrow(uci);
-      s.push({ orig, dest, brush: 'yellow' } as Shape);
+      s.push({ orig, dest, brush: 'pointer' } as Shape);
     }
     return s;
-  }, [repMoves, mine, hover, tab, engineOn, evaluation, explorer.data, key]);
+  }, [repMoves, mine, annotated, hover, tab, engineOn, evaluation, explorer.data, key]);
 
   const onBoardMove = (orig: string, dest: string) => {
     const m = moveFromBoard(key, orig, dest);
@@ -265,15 +266,21 @@ export function BuildView() {
             <Icon name="last" />
           </button>
           <span className="spacer" />
-          <span className="legend">
+          <span className="legend" title="Prepared moves are drawn in the colour of the side that plays them, under the pieces">
             <span>
-              <i style={{ background: 'var(--mine)' }} />
-              your move
+              <i className="side-dot white" />
+              White
             </span>
             <span>
-              <i style={{ background: 'var(--opp)' }} />
-              prepared reply
+              <i className="side-dot black" />
+              Black
             </span>
+            {tab === 'engine' && engineOn && (
+              <span>
+                <i style={{ background: '#7a3db8' }} />
+                engine
+              </span>
+            )}
           </span>
           <button
             className="btn icon"
@@ -522,6 +529,7 @@ function RepMoves({
         return (
           <div key={m.uci} className={`rep-move ${mine ? 'mine' : 'opp'}`}>
             <span className="san" onClick={() => onPlay(m.san)} title="Play this move">
+              <i className={`side-dot ${turnOfKey(positionKey)}`} />
               {m.san}
               <Nags nags={m.nags} />
               {label?.symbol && (

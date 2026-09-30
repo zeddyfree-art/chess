@@ -5,7 +5,7 @@ import { buildQueue, counts, formatInterval, gradeCard, Rating, State, type Trai
 import { activeRep, useApp } from '../lib/store';
 import { saveNow, type SaveResult } from '../lib/sync';
 import { tokensToShapes } from '../lib/shapes';
-import { Board, type Shape } from './Board';
+import { Board, moveArrow, sideCircle, type Shape } from './Board';
 import { Icon } from './Icon';
 import { SavedNote, saveMessage } from './SaveIndicator';
 
@@ -240,8 +240,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
       setLastMove(last ? uciToArrow(last.uci) : null);
       setPhase('await');
       if (item.kind === 'learn') {
-        const [orig, dest] = uciToArrow(item.uci);
-        setShapes([{ orig, dest, brush: 'green' } as Shape]);
+        setShapes([moveArrow(item.uci, rep.side)]);
         setMessage(
           <>
             New move: play <b>{item.san}</b>
@@ -311,7 +310,6 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
         setQueue((q) => [...q, { ...item, kind: 'retry' }]);
       }
       setMistake(true);
-      const [o, d] = uciToArrow(item.uci);
       setMessage(
         <>
           Not your repertoire move. Play <b>{item.san}</b>.
@@ -320,7 +318,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
       later(() => {
         setPos(item.from);
         setLastMove(path.length ? uciToArrow(path[path.length - 1].uci) : null);
-        setShapes([{ orig: o, dest: d, brush: 'green' } as Shape]);
+        setShapes([moveArrow(item.uci, rep.side)]);
         setPhase('await');
       }, 650);
     }
@@ -329,8 +327,7 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
   const hint = () => {
     if (!item || phase !== 'await') return;
     setHinted(true);
-    const [orig] = uciToArrow(item.uci);
-    setShapes([{ orig, brush: 'yellow' } as Shape]);
+    setShapes([sideCircle(uciToArrow(item.uci)[0], rep.side)]);
   };
 
   if (phase === 'done' || !item) {
@@ -498,7 +495,7 @@ function LinesSession({ rep, start, onExit }: { rep: Repertoire; start: PathStep
       later(() => {
         setShown(pos);
         setWaiting(false);
-        setShapes(expected.map((x) => ({ orig: uciToArrow(x.uci)[0], dest: uciToArrow(x.uci)[1], brush: 'green' }) as Shape));
+        setShapes(expected.map((x) => moveArrow(x.uci, rep.side)));
       }, 650);
     }
   };
