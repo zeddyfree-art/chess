@@ -1361,6 +1361,10 @@ a.btn {
   color: var(--gap);
 }
 
+.save-note .warn {
+  color: var(--due);
+}
+
 
 /* ---------- PGN import, comments and drawings ---------- */
 
@@ -1469,4 +1473,35 @@ a.btn {
 
 .nag-picker .small {
   min-width: 56px;
+}
+
+/* ---------- Sync paused banner ---------- */
+
+.sync-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px 12px;
+  flex-wrap: wrap;
+  padding: 10px 20px;
+  background: var(--due-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--due) 40%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.sync-banner > svg {
+  color: var(--due);
+  flex: none;
+}
+
+.sync-banner-text {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .sync-banner {
+    padding: 10px 16px;
+  }
 }

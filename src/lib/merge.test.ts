@@ -3,11 +3,11 @@ import { playSan, START_KEY, type PlayedMove } from './chess';
 import { Chess } from 'chessops/chess';
 import { parseFen } from 'chessops/fen';
 import { encodeBoard, legalMoves, moveIndex, sampleMove } from './maiaEncoding';
-import { mergeData } from './merge';
-import { addLine, newRepertoire, setShapes, type Repertoire } from './repertoire';
+import { mergeData, sameSyncedContent } from './merge';
+import { addLine, deleteMove, movesAt, newRepertoire, setMoveComment, setNote, setShapes, type Repertoire } from './repertoire';
 import { classify } from './sync';
 import { gradeCard, Rating, syncCards } from './srs';
-import { EMPTY_DATA, type AppData, type Profile } from './store';
+import { EMPTY_DATA, useApp, type AppData, type Profile } from './store';
 
 function line(sans: string[]): PlayedMove[] {
   const out: PlayedMove[] = [];
@@ -28,6 +28,8 @@ function rep(id: string, profileId: string, sans: string[], updatedAt: number): 
 }
 
 const data = (patch: Partial<AppData>): AppData => ({ ...EMPTY_DATA, ...patch });
+
+const after = (...sans: string[]) => line(sans).at(-1)!.to;
 
 describe('mergeData', () => {
   it('keeps items that exist on only one side', () => {
@@ -121,5 +123,114 @@ describe('classify (what counts as an edit for syncing)', () => {
     const id = Object.keys(r.cards)[0];
     expect(classify(base, withRep({ ...r, cards: { ...r.cards, [id]: gradeCard(r.cards[id], Rating.Good, 5000) } }))).toBe('training');
     expect(classify(base, withRep({ ...r, notes: { x: 'note' } }))).toBe('edit');
+  });
+});
+
+describe('three-way merge (what each device changed since its last sync)', () => {
+  const p = profile('p');
+  const wrap = (r: Repertoire) => data({ profiles: [p], repertoires: [r] });
+  const base = (r: Repertoire) => ({ profiles: [p], repertoires: [r], deleted: {} });
+  const add = (r: Repertoire, sans: string[], at: number) => ({ ...syncCards(addLine(r, line(sans))), updatedAt: at });
+  const synced = () => ({ ...rep('r', 'p', ['e4', 'e5', 'Nf3'], 100) });
+  const train = (r: Repertoire, at: number) => {
+    const id = Object.keys(r.cards)[0];
+    return { ...r, cards: { ...r.cards, [id]: gradeCard(r.cards[id], Rating.Good, at) } };
+  };
+  const sans = (r: Repertoire) => new Set(Object.values(r.positions).flat().map((m) => m.san));
+
+  it('an old copy that was only trained does not overwrite lines added elsewhere (with base)', () => {
+    const b = synced();
+    const desktop = setShapes(add(b, ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5'], 200), START_KEY, ['Ge2e4']);
+    const phone = { ...train(b, 300), updatedAt: 300 }; // old data, even with a training-bumped timestamp
+    const m = mergeData(wrap(phone), wrap(desktop), base(b)).repertoires[0];
+    expect(sans(m)).toEqual(new Set(['e4', 'e5', 'Nf3', 'Nc6', 'Bb5']));
+    expect(m.shapes).toEqual({ [START_KEY]: ['Ge2e4'] });
+    const id = Object.keys(b.cards)[0];
+    expect(m.cards[id].last_review).toBe(300); // the phone's review is kept
+  });
+
+  it('...and without a base (first sync after this update) nothing is lost either', () => {
+    const b = synced();
+    const desktop = add(b, ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5'], 200);
+    const phone = { ...train(b, 300), updatedAt: 300 };
+    for (const [a, c] of [[phone, desktop], [desktop, phone]]) {
+      expect(sans(mergeData(wrap(a), wrap(c), null).repertoires[0])).toEqual(new Set(['e4', 'e5', 'Nf3', 'Nc6', 'Bb5']));
+    }
+  });
+
+  it('a branch pruned on one device disappears on the other', () => {
+    const b = add(synced(), ['e4', 'c5', 'Nf3'], 100);
+    const desktop = { ...deleteMove(b, after('e4'), 'c7c5'), updatedAt: 200 };
+    const phone = train(b, 300);
+    const m = mergeData(wrap(phone), wrap(desktop), base(b)).repertoires[0];
+    expect(sans(m).has('c5')).toBe(false);
+    expect(Object.keys(m.cards).every((id) => !id.startsWith(after('e4', 'c5')))).toBe(true);
+  });
+
+  it('edits on both devices are combined: one adds, the other prunes elsewhere', () => {
+    const b = add(synced(), ['e4', 'c5', 'Nf3'], 100);
+    const desktop = { ...deleteMove(b, after('e4'), 'c7c5'), updatedAt: 200 };
+    const phone = add(b, ['d4', 'd5', 'c4'], 150);
+    for (const [a, c] of [[phone, desktop], [desktop, phone]]) {
+      const m = mergeData(wrap(a), wrap(c), base(b)).repertoires[0];
+      expect(sans(m)).toEqual(new Set(['e4', 'e5', 'Nf3', 'd4', 'd5', 'c4']));
+    }
+  });
+
+  it('a comment changed on one side is taken; changed on both, the latest edit wins', () => {
+    const b = synced();
+    const withComment = (r: Repertoire, text: string, at: number) => ({ ...setMoveComment(r, START_KEY, 'e2e4', text), updatedAt: at });
+    const other = add(b, ['d4'], 150); // edited too, but not this comment
+    expect(movesAt(mergeData(wrap(other), wrap(withComment(b, 'desk', 120)), base(b)).repertoires[0], START_KEY)[0].comment).toBe('desk');
+    const m = mergeData(wrap(withComment(b, 'phone', 300)), wrap(withComment(b, 'desk', 200)), base(b)).repertoires[0];
+    expect(movesAt(m, START_KEY)[0].comment).toBe('phone');
+  });
+
+  it('removing a note or drawing on one side removes it everywhere', () => {
+    const b = setShapes(setNote(synced(), after('e4'), 'note'), after('e4'), ['Rd5']);
+    const desktop = { ...setShapes(setNote(b, after('e4'), ''), after('e4'), []), updatedAt: 200 };
+    const phone = add(b, ['d4'], 150);
+    const m = mergeData(wrap(phone), wrap(desktop), base(b)).repertoires[0];
+    expect(m.notes).toEqual({});
+    expect(m.shapes).toEqual({});
+    expect(sans(m).has('d4')).toBe(true);
+  });
+
+  it('training progress still merges per card', () => {
+    const b = synced();
+    const [id1, id2] = Object.keys(add(b, ['d4', 'd5', 'c4'], 100).cards);
+    const both = add(b, ['d4', 'd5', 'c4'], 100);
+    const x = { ...both, cards: { ...both.cards, [id1]: gradeCard(both.cards[id1], Rating.Good, 500) } };
+    const y = { ...both, cards: { ...both.cards, [id2]: gradeCard(both.cards[id2], Rating.Again, 600) } };
+    const m = mergeData(wrap(x), wrap(y), base(both)).repertoires[0];
+    expect(m.cards[id1].last_review).toBe(500);
+    expect(m.cards[id2].last_review).toBe(600);
+  });
+});
+
+describe('training does not count as an edit', () => {
+  it('keeps the repertoire edit time when only cards change, and bumps it for real edits', () => {
+    const r = rep('r', 'p', ['e4', 'e5', 'Nf3'], 100);
+    useApp.setState({ data: data({ profiles: [profile('p')], repertoires: [r] }) });
+    const id = Object.keys(r.cards)[0];
+    useApp.getState().updateRep('r', (x) => ({ ...x, cards: { ...x.cards, [id]: gradeCard(x.cards[id], Rating.Good) } }), 'training', { undoable: false });
+    const trained = useApp.getState().data.repertoires[0];
+    expect(trained.cards[id].reps).toBe(1);
+    expect(trained.updatedAt).toBe(100);
+    useApp.getState().updateRep('r', (x) => setNote(x, START_KEY, 'n'), 'note');
+    expect(useApp.getState().data.repertoires[0].updatedAt).toBeGreaterThan(100);
+  });
+});
+
+describe('sameSyncedContent', () => {
+  it('sees equal content in different objects and order, and any real difference', () => {
+    const r1 = rep('a', 'p', ['e4'], 1);
+    const r2 = rep('b', 'p', ['d4'], 1);
+    const x = data({ profiles: [profile('p')], repertoires: [r1, r2] });
+    expect(sameSyncedContent(x, data({ profiles: [profile('p')], repertoires: [structuredClone(r2), structuredClone(r1)] }))).toBe(true);
+    expect(sameSyncedContent(x, data({ profiles: [profile('p')], repertoires: [r1, setNote(r2, START_KEY, 'n')] }))).toBe(false);
+    expect(sameSyncedContent(x, data({ profiles: [profile('p')], repertoires: [r1] }))).toBe(false);
+    expect(sameSyncedContent(x, { ...x, deleted: { z: 1 } })).toBe(false);
+    expect(sameSyncedContent(x, { ...x, activeRepId: 'b' })).toBe(true);
   });
 });

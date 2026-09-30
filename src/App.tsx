@@ -6,7 +6,7 @@ import { BuildView } from './components/BuildView';
 import { HomeView, NewRepertoireDialog } from './components/HomeView';
 import { Icon, type IconName } from './components/Icon';
 import { PlayView } from './components/PlayView';
-import { SaveIndicator } from './components/SaveIndicator';
+import { SaveIndicator, SyncBanner } from './components/SaveIndicator';
 import { SettingsView } from './components/SettingsView';
 import { TrainView } from './components/TrainView';
 import { TreeView } from './components/TreeView';
@@ -14,7 +14,7 @@ import { googleClientId, preloadGoogle } from './lib/drive';
 import { useKey } from './lib/hooks';
 import { counts } from './lib/srs';
 import { activeRep, PROFILE_COLORS, useApp, type View } from './lib/store';
-import { connectDrive, reconnectDrive, syncNow, useSync } from './lib/sync';
+import { connectDrive, reconnectMessage, syncNow, useSync } from './lib/sync';
 
 const NAV: { view: View; label: string; icon: IconName; needsRep: boolean }[] = [
   { view: 'home', label: 'Overview', icon: 'home', needsRep: false },
@@ -61,6 +61,7 @@ export function App() {
   return (
     <div className="app">
       <TopBar />
+      <SyncBanner />
       <main>
         <ErrorBoundary key={view} onReset={() => useApp.getState().setView('home')}>
           {content}
@@ -109,7 +110,7 @@ function SyncButton() {
             ? 'Sync paused — click to reconnect Google Drive'
             : `Sync error: ${error ?? ''}`;
   const click = () => {
-    if (status === 'needs-auth') reconnectDrive().catch((e) => showToast((e as Error).message));
+    if (status === 'needs-auth') void reconnectMessage().then(showToast);
     else if (status === 'error') setView('settings');
     else syncNow();
   };

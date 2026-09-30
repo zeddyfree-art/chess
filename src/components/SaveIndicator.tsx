@@ -1,4 +1,5 @@
-import { reconnectDrive, useSync, type SaveResult } from '../lib/sync';
+import { useEffect, useState } from 'react';
+import { reconnectMessage, useSync, type SaveResult } from '../lib/sync';
 import { useApp, useSaveState } from '../lib/store';
 import { Icon } from './Icon';
 
@@ -7,7 +8,49 @@ function ago(t: number | null): string {
   const s = (Date.now() - t) / 1000;
   if (s < 60) return 'just now';
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  return `${Math.round(s / 3600)} h ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  const d = Math.round(s / 86400);
+  return d === 1 ? 'yesterday' : `${d} days ago`;
+}
+
+/** Google gives a browser app one hour of access at a time, and asking again needs a tap. So when this device
+ *  cannot sync (typically: a phone opened after a while), say so plainly: it may be showing old data. */
+export function SyncBanner() {
+  const status = useSync((s) => s.status);
+  const lastSyncAt = useSync((s) => s.lastSyncAt);
+  const showToast = useApp((s) => s.showToast);
+  const [later, setLater] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (status === 'synced') setLater(false); // show again the next time it pauses
+  }, [status]);
+  if (later || status !== 'needs-auth') return null;
+
+  const sync = async () => {
+    setBusy(true);
+    showToast(await reconnectMessage());
+    setBusy(false);
+  };
+  return (
+    <div className="sync-banner" role="status">
+      <Icon name="cloud" size={18} />
+      <div className="sync-banner-text">
+        <b>Not synced with Google Drive{lastSyncAt ? ` since ${ago(lastSyncAt)}` : ''}.</b>{' '}
+        <span className="muted">
+          Changes from your other devices are not on this one yet (and the other way round). Google asks you to confirm about
+          once an hour.
+        </span>
+      </div>
+      <div className="row" style={{ gap: 6 }}>
+        <button className="btn primary sm" disabled={busy} onClick={sync}>
+          <Icon name="refresh" size={14} /> {busy ? 'Syncing…' : 'Sync now'}
+        </button>
+        <button className="btn ghost sm" onClick={() => setLater(true)}>
+          Later
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /** Small status in the top bar: everything is saved on this device, and how Google Drive is doing. */
@@ -59,32 +102,33 @@ export function saveMessage(r: SaveResult): string {
   }
 }
 
-/** Shown when a training session ends. */
+/** Shown when a training session ends. The Google Drive part follows the live sync state, so it turns
+ *  green as soon as a reconnect has uploaded the progress. */
 export function SavedNote({ state }: { state: SaveResult | 'saving' | null }) {
   const showToast = useApp((s) => s.showToast);
+  const live = useSync((s) => s.status);
+  const error = useSync((s) => s.error);
+  const [busy, setBusy] = useState(false);
   if (!state || state === 'saving') return <div className="small faint">Saving your progress…</div>;
+  const drive = state.drive === 'off' || state.drive === 'unconfigured' ? 'off' : live;
+  const reconnect = async () => {
+    setBusy(true);
+    showToast(await reconnectMessage());
+    setBusy(false);
+  };
   return (
     <div className="save-note small">
       <span className={state.local ? 'ok' : 'bad'}>
         {state.local ? '✓ Progress saved on this device' : '⚠ Could not save on this device (download a backup in Settings)'}
       </span>
-      {state.drive === 'synced' && <span className="ok"> · synced to Google Drive</span>}
-      {state.drive === 'error' && (
-        <span className="bad"> · Google Drive sync failed{state.error ? `: ${state.error}` : ''}</span>
-      )}
-      {state.drive === 'needs-auth' && (
+      {drive === 'synced' && <span className="ok"> · synced to Google Drive</span>}
+      {(drive === 'syncing' || drive === 'pending') && <span className="muted"> · syncing to Google Drive…</span>}
+      {drive === 'error' && <span className="bad"> · Google Drive sync failed{error ? `: ${error}` : ''}</span>}
+      {drive === 'needs-auth' && (
         <>
-          <span className="bad"> · Google Drive sync is paused </span>
-          <button
-            className="btn sm"
-            onClick={() =>
-              reconnectDrive().then(
-                () => showToast('Synced to Google Drive'),
-                (e) => showToast((e as Error).message),
-              )
-            }
-          >
-            Reconnect
+          <span className="warn"> · not synced to Google Drive yet </span>
+          <button className="btn sm" disabled={busy} onClick={reconnect}>
+            {busy ? 'Syncing…' : 'Sync now'}
           </button>
         </>
       )}

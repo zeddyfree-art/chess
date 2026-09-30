@@ -121,10 +121,16 @@ export function clearToken() {
 
 /** Opens Google's popup. Must be called from a click (browsers block popups otherwise).
  *  After the first consent the popup closes by itself. Tokens last one hour. */
-export async function requestToken(opts: { firstTime?: boolean; hint?: string } = {}): Promise<string> {
+export function requestToken(opts: { firstTime?: boolean; hint?: string } = {}): Promise<string> {
   const clientId = googleClientId();
-  if (!clientId) throw new Error('Google Drive is not configured for this site.');
-  await loadGis();
+  if (!clientId) return Promise.reject(new Error('Google Drive is not configured for this site.'));
+  // When the script is already there, open the popup right away, still inside the click: Safari on
+  // iPhone blocks popups that open after waiting for something.
+  if (window.google?.accounts?.oauth2) return openTokenPopup(clientId, opts);
+  return loadGis().then(() => openTokenPopup(clientId, opts));
+}
+
+function openTokenPopup(clientId: string, opts: { firstTime?: boolean; hint?: string }): Promise<string> {
   return new Promise((resolve, reject) => {
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: clientId,

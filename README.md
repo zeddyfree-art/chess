@@ -50,9 +50,17 @@ Everything is stored in the browser (IndexedDB) — no account, no server. Optio
   restored from Settings;
 - the app uses the `drive.file` permission: it can only see the files it created itself.
 
-Google gives browser apps one-hour sessions, so after a break the cloud icon in the top bar may ask you to
-reconnect with one click. Local changes are kept meanwhile. If two devices edited the same repertoire offline, the
-latest edit wins and training progress is merged per card; deletions are remembered.
+**Google gives browser apps one-hour sessions**, and a new one needs a tap (a website without its own server cannot
+renew it silently). So when you open the app after a while, typically on a phone, it cannot fetch your latest data by
+itself: a banner says *Not synced with Google Drive since …* with a **Sync now** button, and until you tap it you are
+looking at this device's own copy. Local changes are kept meanwhile and go up with the next sync.
+
+**How two devices are merged.** Each device remembers what Drive held at its last sync, so it can tell who changed what,
+like a three-way merge in Git. A repertoire changed on one device only takes that version; changed on both, it is merged
+move by move: lines added on either device are kept, lines pruned on either device are removed, and for a comment,
+symbol, note or drawing changed on both the latest edit wins. Training progress is merged per card (the latest review
+wins) and does not count as editing, so training on an old copy can never undo lines added elsewhere. Deleted players and
+repertoires stay deleted.
 
 The site owner has to create a Google OAuth client ID once: see [docs/google-drive-setup.md](docs/google-drive-setup.md).
 

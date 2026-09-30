@@ -20,8 +20,8 @@ import {
   validToken,
   type DriveFile,
 } from './drive';
-import { mergeData, sameSyncedContent } from './merge';
-import { exportBackup, flushLocal, parseBackup, useApp, useSaveState, type AppData } from './store';
+import { mergeData, sameSyncedContent, type SyncBase } from './merge';
+import { exportBackup, flushLocal, loadSyncBase, parseBackup, saveSyncBase, useApp, useSaveState, type AppData } from './store';
 
 export type SyncStatus = 'unconfigured' | 'off' | 'syncing' | 'synced' | 'pending' | 'needs-auth' | 'error';
 
@@ -46,6 +46,8 @@ interface Meta {
   backupDay?: string;
   /** Local changes not uploaded yet (survives reloads). */
   dirty?: boolean;
+  /** Last successful sync on this device. */
+  lastSyncAt?: number;
 }
 
 function readMeta(): Meta {
@@ -64,6 +66,27 @@ function writeMeta(patch: Partial<Meta>) {
     /* ignore */
   }
   return next;
+}
+
+// What Drive held at this device's last successful sync, so a merge can tell which side changed what.
+let base: SyncBase | null | undefined; // undefined = not loaded yet
+let baseLoading: Promise<SyncBase | null> | null = null;
+
+function getBase(): Promise<SyncBase | null> {
+  if (base !== undefined) return Promise.resolve(base);
+  baseLoading ??= loadSyncBase<SyncBase>().then((b) => {
+    if (base === undefined) base = b;
+    return base;
+  });
+  return baseLoading;
+}
+
+async function rememberBase(data: AppData | SyncBase) {
+  if (data === base) return;
+  const next: SyncBase = { profiles: data.profiles, repertoires: data.repertoires, deleted: data.deleted ?? {} };
+  base = next;
+  // If this fails, the next merge simply has no base and keeps everything from both sides.
+  await saveSyncBase(next).catch(() => {});
 }
 
 let changeSeq = 0;
@@ -118,7 +141,7 @@ function idleStatus(): SyncStatus {
 /** Call once after local data is loaded. */
 export function initSync() {
   const meta = readMeta();
-  setStatus({ status: idleStatus(), account: meta.account ?? null });
+  setStatus({ status: idleStatus(), account: meta.account ?? null, lastSyncAt: meta.lastSyncAt ?? null });
   // Only devices that are already connected talk to Google on startup; everyone else loads the
   // Google script when they hover over or focus a "Connect" button (see preloadGoogle).
   if (meta.connected) preloadGoogle();
@@ -177,9 +200,25 @@ export async function reconnectDrive(): Promise<void> {
   await syncNow();
 }
 
+/** Reconnects (call from a click) and says how it went, for a toast. Never throws. */
+export async function reconnectMessage(): Promise<string> {
+  try {
+    await reconnectDrive();
+  } catch (e) {
+    return (e as Error).message;
+  }
+  const st = useSync.getState();
+  if (st.status === 'synced') return 'Up to date with Google Drive';
+  if (st.status === 'error') return `Google Drive sync failed: ${st.error ?? 'unknown error'}`;
+  if (st.status === 'needs-auth') return 'Google did not give access. Try again.';
+  return 'Connected to Google Drive';
+}
+
 export async function disconnectDrive() {
   await revokeToken();
   localStorage.removeItem(META_KEY);
+  base = null;
+  await saveSyncBase(null).catch(() => {});
   setStatus({ status: idleStatus(), account: null, lastSyncAt: null, error: null });
 }
 
@@ -229,21 +268,26 @@ async function run() {
   setStatus({ status: 'syncing', error: null });
   const seqAtStart = changeSeq;
   try {
+    const known = await getBase();
     let folderId = meta.folderId ?? (await ensureFolder());
     let file: DriveFile | null = meta.fileId ? await fileMeta(meta.fileId) : null;
     file ??= await findSyncFile();
 
     let version: string | undefined;
+    let onDrive: AppData | SyncBase;
     if (!file) {
       // First sync, or the file/folder was removed from Drive: (re)create them.
       folderId = await ensureFolder();
-      const created = await createFile('repertoire-sync.json', 'sync', folderId, serialize(useApp.getState().data));
+      const snapshot = useApp.getState().data;
+      const created = await createFile('repertoire-sync.json', 'sync', folderId, serialize(snapshot));
       file = created;
       version = created.version;
-    } else if (file.version !== meta.version) {
-      // Someone (another device) changed the file since we last synced: merge.
+      onDrive = snapshot;
+    } else if (file.version !== meta.version || !useApp.getState().data.profiles.length) {
+      // Someone (another device) changed the file since we last synced: merge. Also when this device has
+      // no data at all (site data partly cleared, or closed before it was stored): fetch it again.
       const remote = parseBackup(await download(file.id));
-      const merged = mergeData(useApp.getState().data, remote);
+      const merged = mergeData(useApp.getState().data, remote, known);
       applyingRemote = true;
       try {
         useApp.getState().applyRemote(merged);
@@ -252,14 +296,22 @@ async function run() {
       }
       version = file.version;
       if (!sameSyncedContent(merged, remote)) version = (await updateFile(file.id, serialize(merged))).version;
+      onDrive = merged;
     } else if (meta.dirty) {
-      version = (await updateFile(file.id, serialize(useApp.getState().data))).version;
-    } else version = file.version;
+      const snapshot = useApp.getState().data;
+      version = (await updateFile(file.id, serialize(snapshot))).version;
+      onDrive = snapshot;
+    } else {
+      version = file.version;
+      onDrive = known ?? useApp.getState().data; // nothing changed on either side
+    }
 
+    await rememberBase(onDrive);
     const stillDirty = changeSeq !== seqAtStart;
-    writeMeta({ folderId, fileId: file.id, version, dirty: stillDirty });
+    const now = Date.now();
+    writeMeta({ folderId, fileId: file.id, version, dirty: stillDirty, lastSyncAt: now });
     await dailyBackup(folderId);
-    setStatus({ status: stillDirty ? 'pending' : 'synced', lastSyncAt: Date.now(), error: null });
+    setStatus({ status: stillDirty ? 'pending' : 'synced', lastSyncAt: now, error: null });
     if (stillDirty) again = true;
   } catch (e) {
     if (e instanceof DriveAuthError) {

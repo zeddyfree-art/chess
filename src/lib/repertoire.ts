@@ -121,6 +121,21 @@ export function setNote(rep: Repertoire, key: string, note: string): Repertoire 
   return { ...rep, notes, updatedAt: Date.now() };
 }
 
+/** True when only training progress (cards) differs. Cards carry their own review times, so training does
+ *  not count as editing the repertoire; otherwise a device with an old copy that trains would look newer
+ *  than the device where the lines were added. */
+export function onlyCardsChanged(a: Repertoire, b: Repertoire): boolean {
+  return (
+    a.positions === b.positions &&
+    a.notes === b.notes &&
+    a.shapes === b.shapes &&
+    a.engine === b.engine &&
+    a.name === b.name &&
+    a.side === b.side &&
+    a.profileId === b.profileId
+  );
+}
+
 /** Sets the arrows and circles shown on a position; an empty list removes them. */
 export function setShapes(rep: Repertoire, key: string, tokens: readonly string[]): Repertoire {
   const current = rep.shapes?.[key] ?? [];

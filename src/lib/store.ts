@@ -1,10 +1,10 @@
 // Global app state (zustand). Data lives in IndexedDB in the browser (and optionally
 // syncs to Google Drive, see sync.ts). Every repertoire change goes through
-// `updateRep` so it can be undone and so its `updatedAt` is bumped for syncing.
+// `updateRep` so it can be undone and so its `updatedAt` (last edit, not training) is bumped for syncing.
 import { create } from 'zustand';
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { playSan, type PlayedMove, type Side } from './chess';
-import { findMove, findPath, newRepertoire, ROOT, type Repertoire } from './repertoire';
+import { findMove, findPath, newRepertoire, onlyCardsChanged, ROOT, type Repertoire } from './repertoire';
 import { syncCards } from './srs';
 
 export interface Profile {
@@ -222,7 +222,7 @@ export const useApp = create<AppState>()((set, get) => {
       if (!before) return;
       const changed = syncCards(fn(before));
       if (changed === before) return;
-      const after = { ...changed, updatedAt: Date.now() };
+      const after = { ...changed, updatedAt: onlyCardsChanged(before, changed) ? before.updatedAt : Date.now() };
       mapRep(repId, () => after);
       if (opts?.undoable === false) return;
       set((s) => {
@@ -375,6 +375,21 @@ let flusher: (() => Promise<void>) | null = null;
 /** Writes any pending change to local storage right now. Resolves when it is on disk (or failed). */
 export function flushLocal(): Promise<void> {
   return flusher?.() ?? Promise.resolve();
+}
+
+/** The data as it was at the last successful Google Drive sync on this device (see merge.ts). */
+export async function loadSyncBase<T>(): Promise<T | null> {
+  if (!dataStore) return null;
+  try {
+    return ((await idbGet('sync-base', dataStore)) as T | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSyncBase(base: unknown): Promise<void> {
+  if (!dataStore) return;
+  await idbSet('sync-base', base ?? null, dataStore);
 }
 
 const STORAGE_UNAVAILABLE = 'Browser storage is unavailable (private window or blocked site data). Changes are lost when you close this tab.';
