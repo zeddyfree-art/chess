@@ -128,6 +128,18 @@ against the reference implementation of the Maia platform. Move choice is sample
 opening phase uses the Lichess database at the opponent's level while there are enough games, or your own prepared
 lines if you choose so.
 
+## Make it your own
+
+We are in an era where you can shape software around your own way of studying, instead of adapting to someone else's.
+This app was made that way: in plain-language conversations with [Claude Code](https://claude.com/claude-code), by someone
+who does not program. So make it your own:
+
+- **Change what doesn't fit you.** Fork the repository, open it with an AI coding assistant such as Claude Code, and
+  describe what you want in your own words: a different training rhythm, other rating groups, your language, a new view.
+- **Keep it open.** The app is GPL-3.0: you may change it and share it; if you share a changed version, share its source
+  under the same licence.
+- **Share back** what others could use, as an [issue](https://github.com/zeddyfree-art/chess/issues) or a pull request.
+
 ## Run locally
 
 Requires [Node.js](https://nodejs.org) 22+.
