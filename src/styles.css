@@ -1524,3 +1524,17 @@ a.btn {
     padding: 10px 16px;
   }
 }
+
+/* Scale under a range slider: end values at the edges, one mark at its real position. */
+.range-scale {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+}
+
+.range-mark {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}

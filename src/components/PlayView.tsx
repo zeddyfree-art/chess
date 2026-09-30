@@ -105,11 +105,15 @@ function PlaySetup({ onStart }: { onStart: (g: GameConfig) => void }) {
             Opponent strength: <span className="num">{level}</span> <span className="muted">({levelName(level)})</span>
           </label>
           <input type="range" min={MAIA_MIN} max={MAIA_MAX} step={100} value={level} onChange={(e) => setLevel(Number(e.target.value))} />
-          <div className="row small faint">
+          <div className="range-scale small faint">
             <span>{MAIA_MIN}</span>
-            <span className="spacer" />
-            <span>your rating ≈ {profileRating(profile)}</span>
-            <span className="spacer" />
+            {/* Under the player's own rating on the slider, kept clear of the end labels. */}
+            <span
+              className="range-mark"
+              style={{ left: `${Math.min(82, Math.max(18, ((profileRating(profile) - MAIA_MIN) / (MAIA_MAX - MAIA_MIN)) * 100))}%` }}
+            >
+              your rating ≈ {profileRating(profile)}
+            </span>
             <span>{MAIA_MAX}</span>
           </div>
         </div>
