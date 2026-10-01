@@ -264,6 +264,7 @@ export function SettingsView() {
             or in your own Google Drive.
           </div>
           <div className="row wrap small">
+            <a href="#about">About this app</a>
             <a href="privacy.html">Privacy Policy</a>
             <a href="terms.html">Terms of Service</a>
             <a href="https://github.com/zeddyfree-art/chess" target="_blank" rel="noreferrer">

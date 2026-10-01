@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatLine, moveFromBoard, uciToArrow } from '../lib/chess';
+import { formatLine, lichessAnalysisUrl, lineFromSans, moveFromBoard, uciToArrow, type PlayedMove, type Side } from '../lib/chess';
 import { edgeId, findPath, isMine, movesAt, myEdgesInOrder, reachable, ROOT, type PathStep, type Repertoire } from '../lib/repertoire';
 import { buildQueue, counts, formatInterval, gradeCard, Rating, State, type TrainItem } from '../lib/srs';
 import { activeRep, useApp } from '../lib/store';
@@ -399,12 +399,35 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
               Stop
             </button>
           </div>
+          <PositionLinks line={path} positionKey={item.from} orientation={rep.side} />
         </div>
         <div className="help">
           A hint (which piece) counts as “hard”, a wrong move as “again”. Cards you got wrong come back at the end of the
           session.
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The position on the board, elsewhere: on the build board (this ends the session; progress so far is saved)
+ *  or on the Lichess analysis board in a new tab (the session goes on). */
+function PositionLinks({ line, positionKey, orientation }: { line: PlayedMove[]; positionKey: string; orientation: Side }) {
+  const openLine = useApp((s) => s.openLine);
+  return (
+    <div className="row wrap" style={{ gap: 6 }}>
+      <button className="btn sm ghost" onClick={() => openLine(line)} title="Open this position on the build board (ends the session; your progress is saved)">
+        <Icon name="board" size={14} /> Open in Build
+      </button>
+      <a
+        className="btn sm ghost"
+        href={lichessAnalysisUrl(positionKey, orientation, line.length)}
+        target="_blank"
+        rel="noreferrer"
+        title="Analyse this position on Lichess, in a new tab"
+      >
+        <Icon name="external" size={14} /> Analyse on Lichess
+      </a>
     </div>
   );
 }
@@ -533,6 +556,7 @@ function LinesSession({ rep, start, onExit }: { rep: Repertoire; start: PathStep
               Stop
             </button>
           </div>
+          <PositionLinks line={lineFromSans(line) ?? []} positionKey={pos} orientation={rep.side} />
         </div>
       </div>
     </div>

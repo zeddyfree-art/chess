@@ -2,6 +2,7 @@
 export function Footer({ className = 'site-footer' }: { className?: string }) {
   return (
     <footer className={className}>
+      <a href="#about">About</a>
       <a href="privacy.html">Privacy Policy</a>
       <a href="terms.html">Terms of Service</a>
       <a href="https://github.com/zeddyfree-art/chess" target="_blank" rel="noreferrer">

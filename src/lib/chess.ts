@@ -134,3 +134,23 @@ export function formatLine(sans: string[], startPly = 0): string {
 }
 
 export { makeSquare };
+
+/** Replays SAN moves from `from`; null if one of them is not legal. */
+export function lineFromSans(sans: readonly string[], from = START_KEY): PlayedMove[] | null {
+  const out: PlayedMove[] = [];
+  let key = from;
+  for (const san of sans) {
+    const m = playSan(key, san);
+    if (!m) return null;
+    out.push(m);
+    key = m.to;
+  }
+  return out;
+}
+
+/** The Lichess analysis board at this position (engine, opening explorer, your own analysis), seen from
+ *  `orientation`. `ply` is the number of half-moves played, so Lichess shows the right move number. */
+export function lichessAnalysisUrl(key: string, orientation: Side, ply = 0): string {
+  const fen = `${key} 0 ${Math.floor(ply / 2) + 1}`;
+  return `https://lichess.org/analysis/standard/${fen.replace(/ /g, '_')}?color=${orientation}`;
+}

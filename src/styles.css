@@ -1538,3 +1538,116 @@ a.btn {
   transform: translateX(-50%);
   white-space: nowrap;
 }
+
+/* ---------- About ---------- */
+
+.about {
+  max-width: 780px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.about > .btn {
+  align-self: flex-start;
+}
+
+.about-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.about-head .brand-mark {
+  width: 46px;
+  height: 46px;
+  border-radius: 11px;
+  font-size: 28px;
+  flex: none;
+}
+
+.about h1 {
+  font-size: 24px;
+  margin: 0 0 2px;
+  text-wrap: balance;
+}
+
+.about-head p {
+  margin: 0;
+}
+
+.about .section {
+  padding: 18px 22px;
+}
+
+.about h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+
+.about p,
+.about li,
+.about dd {
+  line-height: 1.6;
+  max-width: 70ch;
+}
+
+.about p {
+  margin: 0 0 10px;
+}
+
+.about p:last-child {
+  margin-bottom: 0;
+}
+
+.about ul,
+.about ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.about-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 18px;
+  margin: 0;
+}
+
+.about-list dt {
+  font-weight: 650;
+}
+
+.about-list dd {
+  margin: 0;
+}
+
+.about code {
+  font-size: 0.92em;
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.about-links {
+  margin: 4px 0 12px;
+}
+
+@media (max-width: 600px) {
+  .about .section {
+    padding: 16px;
+  }
+
+  .about-list {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .about-list dd {
+    margin-bottom: 8px;
+  }
+}

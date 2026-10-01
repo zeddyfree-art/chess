@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AboutView } from './components/AboutView';
 import { AuditView } from './components/AuditView';
 import { Footer } from './components/Footer';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -44,8 +45,32 @@ export function App() {
     [],
   );
 
+  // #about opens the About page, so it can be linked to; the address follows while it is open.
+  useEffect(() => {
+    const fromHash = () => {
+      if (location.hash === '#about') useApp.getState().setView('about');
+    };
+    fromHash();
+    addEventListener('hashchange', fromHash);
+    return () => removeEventListener('hashchange', fromHash);
+  }, []);
+  useEffect(() => {
+    const want = view === 'about' ? '#about' : '';
+    if (location.hash !== want && (want || location.hash === '#about')) history.replaceState(null, '', location.pathname + location.search + want);
+  }, [view]);
+
   if (!loaded) return null;
-  if (!hasProfiles) return <Onboarding />;
+  if (!hasProfiles) {
+    if (view !== 'about') return <Onboarding />;
+    return (
+      <div className="app">
+        <main>
+          <AboutView standalone />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   const needsRep = NAV.find((n) => n.view === view)?.needsRep;
   let content;
@@ -56,6 +81,7 @@ export function App() {
   else if (view === 'audit') content = <AuditView key={rep!.id} />;
   else if (view === 'play') content = <PlayView />;
   else if (view === 'settings') content = <SettingsView />;
+  else if (view === 'about') content = <AboutView />;
   else content = <HomeView />;
 
   return (

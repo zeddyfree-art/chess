@@ -31,7 +31,7 @@ export interface AppData {
   deleted?: Record<string, number>;
 }
 
-export type View = 'home' | 'build' | 'tree' | 'train' | 'play' | 'audit' | 'settings';
+export type View = 'home' | 'build' | 'tree' | 'train' | 'play' | 'audit' | 'settings' | 'about';
 
 export interface Toast {
   id: number;
