@@ -2441,3 +2441,75 @@ a.btn {
     grid-template-columns: 120px 1fr 24px;
   }
 }
+
+.play-toggle {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.play-toggle.in-play {
+  color: var(--mine);
+  background: var(--mine-soft);
+  border-color: transparent;
+}
+
+.play-toggle.study {
+  color: var(--muted);
+}
+
+.rep-card.study {
+  opacity: 0.85;
+}
+
+.rep-compare tbody tr {
+  cursor: pointer;
+}
+
+.rep-compare tbody tr:hover td {
+  background: var(--surface-2);
+}
+
+.rep-compare tbody tr.on td {
+  background: var(--accent-soft);
+}
+
+.rep-compare input[type='radio'] {
+  margin: 0 4px 0 0;
+  vertical-align: -2px;
+  pointer-events: none;
+}
+
+.theme-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.theme-chip {
+  font-size: 11.5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 600px) {
+  .rep-compare th,
+  .rep-compare td {
+    padding: 3px 4px;
+    font-size: 12px;
+  }
+}

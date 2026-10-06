@@ -24,8 +24,9 @@ import {
   type SideSummary,
 } from './analysis';
 import { needsAnalysis } from './analyzer';
-import { outcome, type GameSpeed, type PlayedGame } from './games';
+import { clockSettings, moveTime, outcome, type GameSpeed, type PlayedGame } from './games';
 import { movesAt, type Repertoire } from './repertoire';
+import { themesOf, type Theme } from './themes';
 
 /** Position keys of a game, 0 = start (fast: plays the moves on one board). */
 export function positionKeys(moves: readonly string[]): string[] {
@@ -155,6 +156,13 @@ export function filterGames(games: readonly PlayedGame[], f: InsightFilter, now 
   );
 }
 
+const median = (xs: number[]) => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
 /** "French Defense" from "French Defense: Winawer Variation" (Lichess) or "French Defense Winawer Variation" (Chess.com). */
@@ -179,14 +187,30 @@ export interface Insights {
   losing: { games: number; saved: number };
   errors: { misses: number; threats: number; other: number; total: number };
   missedMoveTypes: { capture: number; check: number; quiet: number };
+  /** How often each tactical theme came up in your mistakes (most frequent first). */
+  themes: { theme: Theme; count: number }[];
+  /** The clock (games with clock times, not daily games). */
+  time: {
+    games: number;
+    /** Median seconds per move: all your moves, and the ones that were big mistakes. */
+    medianMove: number | null;
+    medianMistake: number | null;
+    mistakes: number;
+    /** Big mistakes made with little time left (under 10% of the starting time, at least 20 seconds). */
+    inTrouble: number;
+    /** Share of all your moves made in time trouble, for comparison. */
+    movesInTrouble: number;
+    lostOnTime: number;
+  };
   blundersPerGame: number | null;
   trend: { id: string; at: number; accuracy: number }[];
   openings: { name: string; color: Side; games: number; score: number; accuracy: number | null }[];
   prep: {
     games: number;
     bookMoves: number | null;
-    youLeft: { game: PlayedGame; ply: number; played: string; expected: string[] }[];
-    unprepared: { key: string; ply: number; line: string[]; played: string; color: Side; count: number; lastGame: PlayedGame }[];
+    /** `repId`: the repertoire that has the position, to open it in Build. */
+    youLeft: { game: PlayedGame; ply: number; played: string; expected: string[]; repId?: string }[];
+    unprepared: { key: string; ply: number; line: string[]; played: string; color: Side; count: number; lastGame: PlayedGame; repId?: string }[];
   };
 }
 
@@ -202,7 +226,7 @@ function decidedPhase(worst: { ply: number; loss: number } | null, phases: GameF
 }
 
 export function computeInsights(games: readonly PlayedGame[], reps: readonly Repertoire[]): Insights {
-  const done = games.map((g) => ({ g, f: gameFacts(g) })).filter((x): x is { g: PlayedGame; f: GameFacts } => !!x.f);
+  const done = analysedFacts(games);
   const results = { win: 0, draw: 0, loss: 0 };
   const lossesDecided = { opening: 0, middlegame: 0, endgame: 0, gradual: 0 };
   const winsDecided = { opening: 0, middlegame: 0, endgame: 0, gradual: 0 };
@@ -210,15 +234,14 @@ export function computeInsights(games: readonly PlayedGame[], reps: readonly Rep
   const losing = { games: 0, saved: 0 };
   const errors = { misses: 0, threats: 0, other: 0, total: 0 };
   const missedMoveTypes = { capture: 0, check: 0, quiet: 0 };
+  const themeCounts = new Map<Theme, number>();
+  const time = { games: 0, all: [] as number[], bad: [] as number[], inTrouble: 0, movesInTrouble: 0, moves: 0, lostOnTime: 0 };
   const phaseAcc = Object.fromEntries(PHASES.map((p) => [p, { mine: [] as number[], theirs: [] as number[], moves: 0, errors: 0 }])) as Record<
     Phase,
     { mine: number[]; theirs: number[]; moves: number; errors: number }
   >;
   const openings = new Map<string, { name: string; color: Side; games: number; points: number; acc: number[] }>();
   let blunders = 0;
-  const prepGames: { depth: number }[] = [];
-  const youLeft: Insights['prep']['youLeft'] = [];
-  const unprepared = new Map<string, Insights['prep']['unprepared'][number]>();
 
   for (const { g, f } of done) {
     const o = outcome(g);
@@ -251,6 +274,26 @@ export function computeInsights(games: readonly PlayedGame[], reps: readonly Rep
       else if (m.threat?.length) errors.threats++;
       else errors.other++;
       missedMoveTypes[moveType(m.best[0])]++;
+      for (const t of themesOf({ key: f.keys[m.ply], side: g.myColor, played: g.moves[m.ply], line: m.line, reply: m.reply, threat: m.threat, bestEval: m.bestEval }))
+        themeCounts.set(t, (themeCounts.get(t) ?? 0) + 1);
+    }
+    const tc = g.speed !== 'correspondence' ? clockSettings(g.timeControl) : null;
+    if (tc && g.clocks?.some((c) => c !== null)) {
+      time.games++;
+      const trouble = Math.max(20, tc.base * 0.1);
+      const bad = new Set(g.analysis!.moments.filter((m) => m.kind !== 'inaccuracy').map((m) => m.ply));
+      for (let ply = g.myColor === 'white' ? 0 : 1; ply < g.moves.length; ply += 2) {
+        const t = moveTime(g, ply);
+        if (!t) continue;
+        time.all.push(t.spent);
+        time.moves++;
+        if (t.left < trouble) time.movesInTrouble++;
+        if (bad.has(ply)) {
+          time.bad.push(t.spent);
+          if (t.left < trouble) time.inTrouble++;
+        }
+      }
+      if (o === 'loss' && /time/i.test(g.termination ?? '')) time.lostOnTime++;
     }
     const name = openingFamily(g.opening, g.eco);
     const ok = `${g.myColor}|${name}`;
@@ -260,20 +303,6 @@ export function computeInsights(games: readonly PlayedGame[], reps: readonly Rep
     if (f.mine.byPhase.opening !== null) op.acc.push(f.mine.byPhase.opening);
     openings.set(ok, op);
 
-    const prep = prepCheck(g.moves, f.keys, reps, g.myColor);
-    if (prep.kind !== 'none') {
-      prepGames.push({ depth: prep.ply });
-      if (prep.kind === 'you-left') youLeft.push({ game: g, ply: prep.ply, played: prep.played, expected: prep.expected });
-      if (prep.kind === 'opponent-left') {
-        const id = `${f.keys[prep.ply]}|${prep.played}`;
-        const u = unprepared.get(id);
-        if (u) {
-          u.count++;
-          if (g.playedAt > u.lastGame.playedAt) u.lastGame = g;
-        } else
-          unprepared.set(id, { key: f.keys[prep.ply], ply: prep.ply, line: g.moves.slice(0, prep.ply), played: prep.played, color: g.myColor, count: 1, lastGame: g });
-      }
-    }
   }
 
   const accMine = done.map((x) => x.f.mine.accuracy).filter((x): x is number => x !== null);
@@ -306,18 +335,69 @@ export function computeInsights(games: readonly PlayedGame[], reps: readonly Rep
     losing,
     errors,
     missedMoveTypes,
+    time: {
+      games: time.games,
+      medianMove: median(time.all),
+      medianMistake: median(time.bad),
+      mistakes: time.bad.length,
+      inTrouble: time.inTrouble,
+      movesInTrouble: time.moves ? time.movesInTrouble / time.moves : 0,
+      lostOnTime: time.lostOnTime,
+    },
+    themes: [...themeCounts].map(([theme, count]) => ({ theme, count })).sort((a, b) => b.count - a.count),
     blundersPerGame: done.length ? blunders / done.length : null,
     trend,
     openings: [...openings.values()]
       .map((o) => ({ name: o.name, color: o.color, games: o.games, score: o.points / o.games, accuracy: mean(o.acc) }))
       .sort((a, b) => b.games - a.games || a.name.localeCompare(b.name)),
-    prep: {
-      games: prepGames.length,
-      bookMoves: prepGames.length ? mean(prepGames.map((p) => p.depth / 2)) : null,
-      youLeft: youLeft.sort((a, b) => b.game.playedAt - a.game.playedAt),
-      unprepared: [...unprepared.values()].sort((a, b) => b.count - a.count || b.lastGame.playedAt - a.lastGame.playedAt),
-    },
+    prep: prepSummary(done, reps),
   };
+}
+
+export type PrepSummary = Insights['prep'];
+
+/** How the games went against `reps` (in practice: the repertoires in play, or one you pick to compare). */
+export function prepSummary(done: readonly { g: PlayedGame; f: GameFacts }[], reps: readonly Repertoire[]): PrepSummary {
+  const depths: number[] = [];
+  const youLeft: PrepSummary['youLeft'] = [];
+  const unprepared = new Map<string, PrepSummary['unprepared'][number]>();
+  const owner = (key: string, side: Side) => reps.find((r) => r.side === side && movesAt(r, key).length > 0)?.id;
+  for (const { g, f } of done) {
+    const prep = prepCheck(g.moves, f.keys, reps, g.myColor);
+    if (prep.kind === 'none') continue;
+    depths.push(prep.ply);
+    if (prep.kind === 'you-left')
+      youLeft.push({ game: g, ply: prep.ply, played: prep.played, expected: prep.expected, repId: owner(f.keys[prep.ply], g.myColor) });
+    if (prep.kind === 'opponent-left') {
+      const id = `${f.keys[prep.ply]}|${prep.played}`;
+      const u = unprepared.get(id);
+      if (u) {
+        u.count++;
+        if (g.playedAt > u.lastGame.playedAt) u.lastGame = g;
+      } else
+        unprepared.set(id, {
+          key: f.keys[prep.ply],
+          ply: prep.ply,
+          line: g.moves.slice(0, prep.ply),
+          played: prep.played,
+          color: g.myColor,
+          count: 1,
+          lastGame: g,
+          repId: owner(f.keys[prep.ply], g.myColor),
+        });
+    }
+  }
+  return {
+    games: depths.length,
+    bookMoves: depths.length ? mean(depths.map((d) => d / 2)) : null,
+    youLeft: youLeft.sort((a, b) => b.game.playedAt - a.game.playedAt),
+    unprepared: [...unprepared.values()].sort((a, b) => b.count - a.count || b.lastGame.playedAt - a.lastGame.playedAt),
+  };
+}
+
+/** The analysed games with their facts (for prepSummary on another set of repertoires). */
+export function analysedFacts(games: readonly PlayedGame[]): { g: PlayedGame; f: GameFacts }[] {
+  return games.map((g) => ({ g, f: gameFacts(g) })).filter((x): x is { g: PlayedGame; f: GameFacts } => !!x.f);
 }
 
 /** The phase with the lowest accuracy, if it is clearly lower (at least 3 points and 3 games behind it). */

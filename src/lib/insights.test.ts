@@ -87,3 +87,35 @@ describe('insights', () => {
     expect(filterGames([g], { period: 'all', speeds: [], color: 'black' }, now)).toHaveLength(0);
   });
 });
+
+describe('repertoires in play and study repertoires', () => {
+  it('compares repertoires one by one, and says which one has the position', async () => {
+    const { analysedFacts, prepSummary } = await import('./insights');
+    const { setStudy, inPlay } = await import('./repertoire');
+    const a = { ...addLine(newRepertoire('p1', 'Main', 'white'), lineFromSans(['d4', 'e6', 'Nc3', 'd5'])!), id: 'A' };
+    const b = setStudy({ ...addLine(newRepertoire('p1', 'Test', 'white'), lineFromSans(['d4', 'e6', 'Nc3', 'Bb4', 'Bf4'])!), id: 'B' }, true);
+    expect([a, b].filter(inPlay).map((r) => r.id)).toEqual(['A']);
+    const done = analysedFacts([daily()]);
+    const main = prepSummary(done, [a]);
+    expect(main.unprepared[0]).toMatchObject({ played: 'Bb4', repId: 'A' });
+    const test = prepSummary(done, [b]);
+    expect(test.unprepared).toHaveLength(0);
+    expect(test.bookMoves).toBe(2.5);
+  });
+
+  it('syncs the study flag like an edit', async () => {
+    const { mergeData } = await import('./merge');
+    const { classify } = await import('./sync');
+    const { setStudy } = await import('./repertoire');
+    const { EMPTY_DATA } = await import('./store');
+    const rep = { ...addLine(newRepertoire('p1', 'Main', 'white'), lineFromSans(['e4'])!), id: 'R', updatedAt: 1 };
+    const profile = { id: 'p1', name: 'p', color: '#000', ratings: [], speeds: [], updatedAt: 1 };
+    const base = { ...EMPTY_DATA, profiles: [profile], repertoires: [rep] };
+    const studied = { ...base, repertoires: [setStudy(rep, true)] };
+    expect(classify(base, studied)).toBe('edit');
+    const merged = mergeData(base, studied, { profiles: base.profiles, repertoires: base.repertoires, deleted: {} });
+    expect(merged.repertoires[0].study).toBe(true);
+    const back = mergeData(studied, base, { profiles: base.profiles, repertoires: studied.repertoires, deleted: {} });
+    expect(!!back.repertoires[0].study).toBe(false);
+  });
+});

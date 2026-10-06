@@ -2,7 +2,7 @@
 // spaced repetition. A card holds everything it needs (the position, the moves that are fine, the engine's
 // line), so it does not depend on the game it came from being on this device.
 import { type Side } from './chess';
-import { explainMoment, type KeyMoment, type MomentKind } from './analysis';
+import { explainMoment, formatEval, type KeyMoment, type MomentKind } from './analysis';
 import { gameLabel, gameLine, type PlayedGame } from './games';
 import type { SrsCard } from './repertoire';
 import { newCard, State } from './srs';
@@ -124,4 +124,48 @@ export function mergeMistakes(a: MistakeCard[] = [], b: MistakeCard[] = []): Mis
   }
   // Keep the local order, new ones after.
   return [...byId.values()];
+}
+
+// ---------------------------------------------------------------------------
+// Export: one chapter per card (a position with the better line and the move you played as a variation), for a
+// Lichess study or any PGN reader.
+
+const pgnEscape = (s: string) => s.replace(/[{}]/g, '');
+
+function numbered(sans: readonly string[], startPly: number): string {
+  return sans
+    .map((san, i) => {
+      const ply = startPly + i;
+      const n = Math.floor(ply / 2) + 1;
+      return ply % 2 === 0 ? `${n}. ${san}` : i === 0 ? `${n}... ${san}` : san;
+    })
+    .join(' ');
+}
+
+export function mistakesToPgn(cards: readonly MistakeCard[]): string {
+  return cards
+    .map((c) => {
+      const ply = c.line.length;
+      const fen = `${c.key} 0 ${Math.floor(ply / 2) + 1}`;
+      const game = c.games[0];
+      const bad = c.kind === 'blunder' || c.kind === 'miss' ? '??' : c.kind === 'inaccuracy' ? '?!' : '?';
+      const head = [
+        `[Event "${pgnEscape(`My mistake: ${game?.label ?? 'a game'}`).replace(/"/g, "'")}"]`,
+        `[Site "https://zeddyfree-art.github.io/chess/"]`,
+        `[Date "${new Date(c.createdAt).toISOString().slice(0, 10).replace(/-/g, '.')}"]`,
+        `[Round "-"]`,
+        `[White "${c.side === 'white' ? 'You' : 'Opponent'}"]`,
+        `[Black "${c.side === 'black' ? 'You' : 'Opponent'}"]`,
+        `[Result "*"]`,
+        `[SetUp "1"]`,
+        `[FEN "${fen}"]`,
+        `[Orientation "${c.side}"]`,
+      ];
+      const intro = `{ You played ${c.played} here (${formatEval(c.bestEval)} → ${formatEval(c.playedEval)}). Find a better move. }`;
+      const [first, ...rest] = c.answer;
+      const explanation = pgnEscape(explainCard(c).join(' '));
+      const main = `${numbered([first], ply)}! { ${explanation} } ( ${numbered([c.played], ply)}${bad}${c.reply?.length ? ` ${numbered(c.reply.slice(0, 4), ply + 1)}` : ''} )${rest.length ? ` ${numbered(rest, ply + 1)}` : ''}`;
+      return `${head.join('\n')}\n\n${intro} ${main} *\n`;
+    })
+    .join('\n');
 }

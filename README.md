@@ -24,7 +24,7 @@ Live: <https://zeddyfree-art.github.io/chess/> · [About](https://zeddyfree-art.
 
 | Screen | What you do there |
 | --- | --- |
-| **Overview** | The active player's repertoires with their size and what is due today. Sizes are counted like books and PGN do: one **move** is White's move plus Black's reply (1.e4 e5 is one move); hover a number for the half-moves, your own moves and line lengths. Each card has **Download** (PGN), **Add lines from a PGN** (paste or file) and **Delete** (with confirmation and an Undo). |
+| **Overview** | The active player's repertoires with their size and what is due today. Each is marked **In play** (you play it now: your games are checked against it) or **Study** (you train it, but your games are not checked against it); click the label to switch. Sizes are counted like books and PGN do: one **move** is White's move plus Black's reply (1.e4 e5 is one move); hover a number for the half-moves, your own moves and line lengths. Each card has **Download** (PGN), **Add lines from a PGN** (paste or file) and **Delete** (with confirmation and an Undo). |
 | **Build** | Board plus the current line. Moves you play are a *proposal* (dashed blue) until you **Save** (Enter) or **Discard** (Esc). Next to it: your prepared moves in this position (○ White / ● Black, with number of follow-up moves, comments, ★ main move, delete), a note per position, and tabs **Lichess games**, **Masters** and **Engine**. **Train from here** and **Play from here** start from the position on the board. Imported comments and arrows/circles show here; you can draw your own (see below). |
 | **Tree** | The whole repertoire as a diagram. Green = your move, outlined = opponent move with how often it is played; line thickness = popularity; red dashed nodes = **gaps** (played often, not prepared). Collapse/expand per branch or to a depth, highlight due / dubious / rare moves. Select a node to open it, train or play from it, or **Prune branch** (Delete) — you see beforehand how many moves and cards disappear, and everything can be undone (Ctrl+Z). |
 | **Train** | Two decks: your repertoire and **My mistakes** (positions from your own games, see below). FSRS spaced repetition: each move you play is a card. New moves are shown first and quizzed again later in the session. **Practice lines** plays random lines through without affecting the schedule. Scoped to one branch when started with *Train from here* (review, drill the whole branch, or practice lines). From any card, **Open in Build** shows that position on the build board and **Analyse on Lichess** opens it on the Lichess analysis board. |
@@ -153,8 +153,12 @@ Lichess' too: the middlegame starts when at most ten pieces (not counting kings 
 thinned out, the endgame at six.
 
 **Mistake cards.** After the analysis the Games tab says how many mistakes could become cards; *Choose cards* lists them,
-with the learnable ones ticked. A card is the position from your game: "You played 23.e4 here. Find a better move." Any move
-the engine rates as good counts. Cards are scheduled with FSRS like your repertoire, synced with it, and after each card you
+with the learnable ones ticked (and every overlooked threat). A card is the position from your game: "You played 23.e4 here.
+Find a better move." Any move the engine rates as good counts: a move that is not one of the stored good moves is checked by
+Stockfish on the spot, and counts when it keeps (nearly) as much. When you overlooked a threat, the card first asks what your
+opponent was threatening (you play their move), and then for your answer: seeing the threat is the lesson. Each card shows
+its tactical themes. **PGN** and **Copy** export the whole deck, one chapter per card with the better line and your move as
+a variation, for a Lichess study (Study → Add chapter → PGN; up to 64 chapters per study) or any chess program. Cards are scheduled with FSRS like your repertoire, synced with it, and after each card you
 can play the position out against Maia. One position is one card, however many games it came up in.
 
 **Insights** (Games → Insights) puts your analysed games together, for a period (last week, month, 3 months, year, all),
@@ -168,9 +172,15 @@ time controls and colour of your choice, and always says how many games it rests
   better move was a capture, a check or a quiet move, with a matching habit to work on;
 - **accuracy over time**, game by game with the average of the last ten (click a game to open it);
 - **openings**: score and opening accuracy per opening and colour;
-- **your repertoire in your games**: how long you followed it, the replies your opponents played that you have not prepared
-  (with **Prepare**, which opens that position in Build), and where you left it yourself. Like Chess.com's course check, but
-  against your own repertoire.
+- **tactical themes** of your mistakes (missed or allowed forks, pins and mates, pieces left hanging, material missed or
+  lost, missed sacrifices, overlooked threats), with what to practise for the most frequent one;
+- **the clock** (games with clock times, not daily games): your typical time per move and on your big mistakes, how many
+  came in time trouble (under 10% of your time left), and games lost on time;
+- **your repertoire in your games**: games are checked against the repertoires marked *in play*. A table compares every
+  repertoire (study ones too, to see how your games would have gone with them, or to compare two versions): games it
+  covers, moves followed on average, replies it has no answer to, and how often you left it. Below: the replies you have
+  not prepared (with **Prepare**, which opens that position in Build, in the right repertoire), and where you left it.
+  Like Chess.com's course check, but against your own repertoire.
 
 **Limits worth knowing.** A position from the middlegame rarely comes back move for move, so a card helps through its
 pattern ("the knight left the f-file, now take on f7"); read the explanation after each card. Accuracy is a noisy number for
@@ -248,7 +258,10 @@ src/lib/lichessGames.ts your games from the Lichess export API (streamed), with 
 src/lib/analysis.ts     winning chances, accuracy, phases, verdicts, moments, explanations (pure, tested)
 src/lib/analyzer.ts     the analysis with Stockfish (two passes, null-move threats, Maia) and its background queue
 src/lib/gamesStore.ts   games in IndexedDB, merging games of two devices
-src/lib/mistakes.ts     mistake cards: from a moment, merging, training queue
+src/lib/mistakes.ts     mistake cards: from a moment, merging, training queue, PGN export
+src/lib/insights.ts     the dashboard's numbers, the repertoire check of a game (pure, tested)
+src/lib/themes.ts       tactical themes of a mistake from the stored engine lines (pure, tested)
+src/lib/checkMove.ts    "is my move good too?": a short Stockfish check during training
 src/lib/drive.ts        Google Identity Services + Drive REST (drive.file), folder layout
 src/lib/sync.ts         sync loop (repertoire file and games file), backups; merge.ts: merging two devices' data
 src/lib/store.ts        app state (zustand), undo/redo, IndexedDB persistence

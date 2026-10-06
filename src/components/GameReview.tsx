@@ -14,12 +14,16 @@ import {
 } from '../lib/analysis';
 import { needsAnalysis, pauseQueue, useAnalysisQueue } from '../lib/analyzer';
 import { lichessAnalysisUrl, moveFromBoard, playSan, playUci, sanToUci, START_KEY, uciToArrow, type Side } from '../lib/chess';
-import { formatDate, gameLabel, gameLine, opponentOf, SPEED_NAMES, type PlayedGame } from '../lib/games';
+import { formatClock, formatDate, gameLabel, gameLine, moveTime, opponentOf, SPEED_NAMES, type PlayedGame } from '../lib/games';
 import { useGames } from '../lib/gamesStore';
 import { useKey } from '../lib/hooks';
 import { cardFromMoment, mistakeId } from '../lib/mistakes';
 import { useApp } from '../lib/store';
 import { positionKeys, prepCheck } from '../lib/insights';
+import { inPlay, movesAt } from '../lib/repertoire';
+import { themesOf } from '../lib/themes';
+import { isGoodToo } from '../lib/checkMove';
+import { ThemeChips } from './ThemeChips';
 import { Board, moveArrow, type Shape } from './Board';
 import { EvalGraph, EvalGraphLegend } from './EvalGraph';
 import { Icon } from './Icon';
@@ -28,8 +32,10 @@ interface Retry {
   moment: KeyMoment;
   board: string;
   lastMove: [string, string] | null;
-  state: 'try' | 'wrong' | 'solved' | 'revealed';
+  state: 'try' | 'checking' | 'wrong' | 'solved' | 'revealed';
   tried?: string;
+  /** Not one of the stored good moves, but the engine rates it as good. */
+  goodToo?: boolean;
 }
 
 const engineArrow = (uci: string): Shape => {
@@ -111,14 +117,28 @@ export function GameReview({ game }: { game: PlayedGame }) {
     if (!retry || (retry.state !== 'try' && retry.state !== 'wrong')) return;
     const m = moveFromBoard(keys[retry.moment.ply], orig, dest);
     if (!m) return;
-    const good = retry.moment.best.includes(m.san);
-    setRetry({ ...retry, board: m.to, lastMove: uciToArrow(m.uci), state: good ? 'solved' : 'wrong', tried: m.san });
-    if (!good) {
+    const back = () =>
       setTimeout(
         () => setRetry((r) => (r && r.state === 'wrong' ? { ...r, board: keys[r.moment.ply], lastMove: r.moment.ply > 0 ? uciToArrow(line[r.moment.ply - 1].uci) : null } : r)),
         900,
       );
+    const base = { ...retry, board: m.to, lastMove: uciToArrow(m.uci), tried: m.san, goodToo: false };
+    if (retry.moment.best.includes(m.san)) return setRetry({ ...base, state: 'solved' });
+    if (m.san === line[retry.moment.ply].san) {
+      setRetry({ ...base, state: 'wrong' });
+      return back();
     }
+    // Another move: is it good too? A short engine check decides.
+    setRetry({ ...base, state: 'checking' });
+    isGoodToo(m.to, side, retry.moment.bestEval)
+      .then((r) => {
+        setRetry((cur) => (cur && cur.state === 'checking' && cur.tried === m.san ? { ...cur, state: r?.good ? 'solved' : 'wrong', goodToo: !!r?.good } : cur));
+        if (!r?.good) back();
+      })
+      .catch(() => {
+        setRetry((cur) => (cur && cur.state === 'checking' ? { ...cur, state: 'wrong' } : cur));
+        back();
+      });
   };
 
   const toggleCard = (m: KeyMoment) => {
@@ -286,11 +306,19 @@ export function GameReview({ game }: { game: PlayedGame }) {
                 {moments.indexOf(moment) + 1} of {moments.length}
               </span>
             </div>
+            <ThemeChips
+              themes={themesOf({ key: keys[moment.ply], side, played: line[moment.ply].san, line: moment.line, reply: moment.reply, threat: moment.threat, bestEval: moment.bestEval })}
+            />
             {explainMoment(moment, { played: line[moment.ply].san, previous: line[moment.ply - 1]?.san, rating }).map((t, i) => (
               <div key={i} className="small">
                 {t}
               </div>
             ))}
+            {game.speed !== 'correspondence' && moveTime(game, moment.ply) && (
+              <div className="small muted">
+                You took {formatClock(moveTime(game, moment.ply)!.spent)} for this move, with {formatClock(moveTime(game, moment.ply)!.left)} left on your clock.
+              </div>
+            )}
             <div className="small muted">
               Board: <span className="key-white">white/black arrow</span> what you played, <span className="key-engine">violet</span> the engine’s move.
             </div>
@@ -424,13 +452,25 @@ export function GameReview({ game }: { game: PlayedGame }) {
 /** How the game went against your repertoire (like Chess.com's course check, with your own repertoire). */
 function OpeningCheck({ game }: { game: PlayedGame }) {
   const allReps = useApp((s) => s.data.repertoires);
-  const openLine = useApp((s) => s.openLine);
-  const reps = useMemo(() => allReps.filter((r) => r.profileId === game.profileId && r.side === game.myColor), [allReps, game.profileId, game.myColor]);
-  const check = useMemo(() => prepCheck(game.moves, positionKeys(game.moves), reps, game.myColor), [game.moves, game.myColor, reps]);
+  const { openLine, setActiveRep } = useApp.getState();
+  // Checked against the repertoires in play for the colour you had.
+  const reps = useMemo(
+    () => allReps.filter((r) => r.profileId === game.profileId && r.side === game.myColor && inPlay(r)),
+    [allReps, game.profileId, game.myColor],
+  );
+  const keys = useMemo(() => positionKeys(game.moves), [game.moves]);
+  const check = useMemo(() => prepCheck(game.moves, keys, reps, game.myColor), [game.moves, keys, game.myColor, reps]);
   if (!reps.length || check.kind === 'none') return null;
   const line = gameLine(game.moves);
-  const build = (plies: number, label: string) => (
-    <button className="btn sm ghost" onClick={() => openLine(line.slice(0, plies))}>
+  const owner = (ply: number) => reps.find((r) => movesAt(r, keys[Math.min(ply, keys.length - 1)]).length > 0) ?? reps[0];
+  const build = (plies: number, label: string, at: number) => (
+    <button
+      className="btn sm ghost"
+      onClick={() => {
+        setActiveRep(owner(at).id);
+        openLine(line.slice(0, plies));
+      }}
+    >
       <Icon name="board" size={14} /> {label}
     </button>
   );
@@ -442,14 +482,14 @@ function OpeningCheck({ game }: { game: PlayedGame }) {
         You left your repertoire with <b>{moveNo(check.ply)}{check.played}</b>; it plays {check.expected.map((m) => `${moveNo(check.ply)}${m}`).join(' or ')}.
       </>
     );
-    action = build(check.ply, 'Open in Build');
+    action = build(check.ply, 'Open in Build', check.ply);
   } else if (check.kind === 'opponent-left') {
     text = (
       <>
         Your opponent left your preparation with <b>{moveNo(check.ply)}{check.played}</b>: you have no answer prepared to it.
       </>
     );
-    action = build(check.ply + 1, 'Prepare an answer');
+    action = build(check.ply + 1, 'Prepare an answer', check.ply);
   } else if (check.ply >= game.moves.length) {
     text = <>The whole game stayed in your repertoire.</>;
   } else {
@@ -458,11 +498,11 @@ function OpeningCheck({ game }: { game: PlayedGame }) {
         You followed your repertoire up to {moveNo(check.ply - 1)}{game.moves[check.ply - 1]}, where it ends.
       </>
     );
-    action = build(check.ply, 'Extend in Build');
+    action = build(check.ply, 'Extend in Build', check.ply - 1);
   }
   return (
     <div className="card card-pad stack" style={{ gap: 6 }}>
-      <h3>Your repertoire</h3>
+      <h3>Your repertoire{reps.length === 1 ? `: ${reps[0].name}` : ''}</h3>
       <div className="small">{text}</div>
       {action && <div>{action}</div>}
     </div>
@@ -567,11 +607,21 @@ function RetryPanel({
   let feedback: React.ReactNode;
   let cls = 'info';
   if (retry.state === 'try') feedback = <>You played {no}{played}. Find a better move.</>;
+  else if (retry.state === 'checking') feedback = <>Checking {retry.tried} with the engine…</>;
   else if (retry.state === 'wrong')
-    feedback = retry.tried === played ? <>That is what you played. Look for something better.</> : <>{retry.tried} is not it. Try again.</>;
+    feedback = retry.tried === played ? <>That is what you played. Look for something better.</> : <>{retry.tried} is not good enough. Try again.</>;
   else if (retry.state === 'solved') {
     cls = 'good';
-    feedback = <>{retry.tried}! {retry.tried === m.best[0] ? 'That is the best move.' : `Good too (the engine’s first choice is ${m.best[0]}).`}</>;
+    feedback = (
+      <>
+        {retry.tried}!{' '}
+        {retry.tried === m.best[0]
+          ? 'That is the best move.'
+          : retry.goodToo
+            ? `The engine rates it about as strong as ${m.best[0]}.`
+            : `Good too (the engine’s first choice is ${m.best[0]}).`}
+      </>
+    );
   } else feedback = <>The move was {no}{m.best[0]}.</>;
   if (retry.state === 'wrong') cls = 'bad';
   return (

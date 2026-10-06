@@ -2,13 +2,36 @@ import { useMemo, useState } from 'react';
 import type { Side } from '../lib/chess';
 import { downloadText, safeName } from '../lib/download';
 import { exportPgn, importPgn } from '../lib/pgn';
-import { newRepertoire, stats, toMoves, type Repertoire } from '../lib/repertoire';
+import { newRepertoire, setStudy, stats, toMoves, type Repertoire } from '../lib/repertoire';
 import { counts, State } from '../lib/srs';
 import { activeProfile, useApp } from '../lib/store';
 import { useSync } from '../lib/sync';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import { ImportPgnDialog } from './ImportPgnDialog';
+
+/** In play (you play it now: your games are checked against it) or study (trained, but not checked against your games). */
+function PlayToggle({ rep }: { rep: Repertoire }) {
+  const updateRep = useApp((s) => s.updateRep);
+  const study = !!rep.study;
+  return (
+    <button
+      className={`play-toggle ${study ? 'study' : 'in-play'}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        updateRep(rep.id, (r) => setStudy(r, !study), study ? 'Marked as in play' : 'Marked as study');
+      }}
+      title={
+        study
+          ? 'Study repertoire: you train it, but your games are not checked against it. Click to mark it as in play.'
+          : 'In play: you play this now, so your games are checked against it (game reviews and Insights). Click to mark it as a study repertoire.'
+      }
+      aria-pressed={!study}
+    >
+      {study ? '○ Study' : '● In play'}
+    </button>
+  );
+}
 
 export function HomeView() {
   const data = useApp((s) => s.data);
@@ -53,14 +76,17 @@ export function HomeView() {
 
       <div className="home-grid">
         {summaries.map(({ rep, stats: st, srs }) => (
-          <div key={rep.id} className={`card rep-card ${rep.id === data.activeRepId ? 'active' : ''}`} onClick={() => open(rep.id, 'build')}>
+          <div key={rep.id} className={`card rep-card ${rep.id === data.activeRepId ? 'active' : ''} ${rep.study ? 'study' : ''}`} onClick={() => open(rep.id, 'build')}>
             <div className="row">
               <div className={`side-icon ${rep.side}`}>{rep.side === 'white' ? '♔' : '♚'}</div>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontWeight: 650, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rep.name}>
                   {rep.name}
                 </div>
-                <div className="small muted">{rep.side === 'white' ? 'with White' : 'with Black'}</div>
+                <div className="row small" style={{ gap: 6 }}>
+                  <span className="muted">{rep.side === 'white' ? 'with White' : 'with Black'}</span>
+                  <PlayToggle rep={rep} />
+                </div>
               </div>
               <div className="row" style={{ gap: 2 }} onClick={(e) => e.stopPropagation()}>
                 <button
@@ -227,7 +253,7 @@ export function NewRepertoireDialog({ onClose }: { onClose: () => void }) {
         return;
       }
       rep = res.rep;
-      showToast(`Imported ${toMoves(res.added)} moves from ${res.games} ${res.games === 1 ? 'game' : 'games'}`);
+      showToast(`Imported ${toMoves(res.added)} ${toMoves(res.added) === 1 ? 'move' : 'moves'} from ${res.games} ${res.games === 1 ? 'game' : 'games'}`);
     }
     addRepertoire(rep);
     setView('build');

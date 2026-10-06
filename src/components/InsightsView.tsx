@@ -2,7 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { moveNo, PHASES, type Phase } from '../lib/analysis';
 import { lineFromSans } from '../lib/chess';
 import { formatDate, gameLabel, SPEED_NAMES, type GameSpeed, type PlayedGame } from '../lib/games';
-import { computeInsights, filterGames, weakestPhase, type InsightFilter, type Insights, type Period } from '../lib/insights';
+import {
+  analysedFacts,
+  computeInsights,
+  filterGames,
+  prepSummary,
+  weakestPhase,
+  type InsightFilter,
+  type Insights,
+  type Period,
+  type PrepSummary,
+} from '../lib/insights';
+import { inPlay, type Repertoire } from '../lib/repertoire';
+import { THEME_ADVICE, THEME_NAMES } from '../lib/themes';
 import { mistakeCounts } from '../lib/mistakes';
 import { useApp } from '../lib/store';
 import { Icon } from './Icon';
@@ -50,7 +62,9 @@ export function InsightsView({ games, profileId, suggestions, onChoose }: { game
   }, [filter, profileId]);
 
   const shown = useMemo(() => filterGames(games, filter), [games, filter]);
-  const i = useMemo(() => computeInsights(shown, reps), [shown, reps]);
+  // Your games are checked against the repertoires you play now; study repertoires can be picked below to compare.
+  const playing = useMemo(() => reps.filter(inPlay), [reps]);
+  const i = useMemo(() => computeInsights(shown, playing), [shown, playing]);
   const speeds = [...new Set(games.map((g) => g.speed).filter(Boolean))] as GameSpeed[];
   const cards = mistakeCounts((mistakes ?? []).filter((m) => m.profileId === profileId));
   const toggleSpeed = (s: GameSpeed) => setFilter((f) => ({ ...f, speeds: f.speeds.includes(s) ? f.speeds.filter((x) => x !== s) : [...f.speeds, s] }));
@@ -97,10 +111,12 @@ export function InsightsView({ games, profileId, suggestions, onChoose }: { game
             </div>
             <div className="stack insights-col">
               <MistakesCard i={i} />
+              <ThemesCard i={i} />
+              <TimeCard i={i} />
               <TrendCard i={i} games={shown} />
               <OpeningsCard i={i} />
             </div>
-            <RepertoireCard i={i} hasRep={reps.length > 0} />
+            <RepertoireCard i={i} games={shown} reps={reps} />
           </div>
         </>
       )}
@@ -329,6 +345,88 @@ function MistakesCard({ i }: { i: Insights }) {
   );
 }
 
+function ThemesCard({ i }: { i: Insights }) {
+  const rows = i.themes.slice(0, 8);
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  const top = rows[0];
+  return (
+    <div className="card card-pad stack">
+      <h3>Tactical themes</h3>
+      {!rows.length ? (
+        <div className="small faint">No tactical theme in these mistakes: they were positional (a worse plan or a weaker move).</div>
+      ) : (
+        <>
+          <div className="count-bars">
+            {rows.map((r) => (
+              <div key={r.theme} className="count-row">
+                <span className="count-name">{THEME_NAMES[r.theme]}</span>
+                <div className="hbar plain">
+                  <div className="hbar-fill" style={{ width: `${(r.count / max) * 100}%` }} />
+                </div>
+                <span className="num count-val">{r.count}</span>
+              </div>
+            ))}
+          </div>
+          <div className="small muted">A mistake can have more than one theme, or none (a positional mistake).</div>
+          {top && top.count >= 2 && <div className="takeaway">{THEME_ADVICE[top.theme]}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
+const secs = (x: number | null) => (x === null ? '–' : x < 60 ? `${Math.round(x)} s` : `${Math.floor(x / 60)}:${String(Math.round(x % 60)).padStart(2, '0')}`);
+
+function TimeCard({ i }: { i: Insights }) {
+  const t = i.time;
+  if (!t.games) {
+    return (
+      <div className="card card-pad stack">
+        <h3>The clock</h3>
+        <div className="small faint">
+          No clock times in these games yet. Games fetched from Lichess from now on bring them, and so do PGN files with [%clk] (Chess.com, Lichess).
+          Daily games are left out here.
+        </div>
+      </div>
+    );
+  }
+  const troubleShare = t.mistakes ? t.inTrouble / t.mistakes : 0;
+  let advice = 'Your mistakes do not seem to be about the clock.';
+  if (t.mistakes >= 3 && troubleShare >= 0.3 && troubleShare > t.movesInTrouble * 1.5)
+    advice = `${Math.round(troubleShare * 100)}% of your big mistakes came with little time left: spend a little less time early in the game.`;
+  else if (t.mistakes >= 3 && t.medianMistake !== null && t.medianMove !== null && t.medianMistake < t.medianMove * 0.6)
+    advice = 'Your big mistakes were quick moves: when there is a capture, a check or a threat on the board, take a few seconds more.';
+  return (
+    <div className="card card-pad stack">
+      <h3>The clock</h3>
+      <div className="mistake-kinds">
+        <div>
+          <b className="num">{secs(t.medianMove)}</b>
+          <span>per move</span>
+          <span className="small faint">your typical (median) move</span>
+        </div>
+        <div>
+          <b className="num">{secs(t.medianMistake)}</b>
+          <span>on big mistakes</span>
+          <span className="small faint">the typical time you took on them</span>
+        </div>
+        <div>
+          <b className="num">
+            {t.inTrouble} of {t.mistakes}
+          </b>
+          <span>in time trouble</span>
+          <span className="small faint">under 10% of your time left</span>
+        </div>
+      </div>
+      <div className="small muted">
+        From {plural(t.games, 'game')} with clock times
+        {t.lostOnTime ? ` · lost on time: ${plural(t.lostOnTime, 'game')}` : ''}.
+      </div>
+      <div className="takeaway">{advice}</div>
+    </div>
+  );
+}
+
 function TrendCard({ i, games }: { i: Insights; games: PlayedGame[] }) {
   const openGame = useApp((s) => s.openGame);
   const box = useRef<HTMLDivElement>(null);
@@ -456,67 +554,133 @@ function OpeningsCard({ i }: { i: Insights }) {
   );
 }
 
-function RepertoireCard({ i, hasRep }: { i: Insights; hasRep: boolean }) {
-  const { openLine, openGame } = useApp.getState();
-  const p = i.prep;
-  const buildAt = (sans: string[]) => {
-    const line = lineFromSans(sans);
-    if (line) openLine(line);
-  };
+function RepertoireCard({ i, games, reps }: { i: Insights; games: PlayedGame[]; reps: Repertoire[] }) {
+  const [picked, setPicked] = useState<string>('in-play');
+  const done = useMemo(() => analysedFacts(games), [games]);
+  const rows = useMemo(
+    () => [...reps].sort((a, b) => Number(!!a.study) - Number(!!b.study) || a.side.localeCompare(b.side) || a.name.localeCompare(b.name)).map((r) => ({ rep: r, sum: prepSummary(done, [r]) })),
+    [reps, done],
+  );
+  const playing = reps.filter(inPlay);
+  const selected = picked === 'in-play' ? null : rows.find((r) => r.rep.id === picked);
+  const p: PrepSummary = selected ? selected.sum : i.prep;
+  const choose = (id: string) => setPicked(id);
+
   return (
     <div className="card card-pad stack span-2">
       <h3>Your repertoire in your games</h3>
-      {!hasRep ? (
+      {!reps.length ? (
         <div className="small muted">Build a repertoire to see where your games leave it, and which replies you still need to prepare.</div>
-      ) : !p.games ? (
-        <div className="small muted">None of these games started with your repertoire for that colour.</div>
       ) : (
         <>
-          <div className="small">
-            In {plural(p.games, 'game')} your repertoire covered the start; you followed it for <b>{p.bookMoves?.toFixed(1)}</b> moves on average.
+          <div className="small muted">
+            Your games are checked against the repertoires marked <b>in play</b> (on the Overview). Pick a single one, a study repertoire
+            too, to see how your games would have gone with it, or to compare two versions.
           </div>
-          <div className="prep-cols">
-            <div className="stack" style={{ gap: 6 }}>
-              <b className="small">Replies you have not prepared ({p.unprepared.length})</b>
-              {p.unprepared.length === 0 && <div className="small faint">None: your opponents stayed within your preparation.</div>}
-              {p.unprepared.slice(0, 8).map((u) => (
-                <div key={`${u.key}${u.played}`} className="prep-row">
-                  <span className="small">
-                    {lastMoves(u.line)} <b>{moveNo(u.ply)}{u.played}</b>
-                    <span className="faint"> · {plural(u.count, 'game')}</span>
-                  </span>
-                  <button className="btn sm ghost" title="Open this position in Build to prepare an answer" onClick={() => buildAt([...u.line, u.played])}>
-                    <Icon name="board" size={14} /> Prepare
-                  </button>
-                </div>
+          <div className="table-scroll">
+          <table className="acc-table rep-compare">
+            <thead>
+              <tr>
+                <th>Repertoire</th>
+                <th title="Games whose first position this repertoire covers">Games</th>
+                <th title="Average number of moves the games followed it">Followed</th>
+                <th title="Different replies your opponents played that it has no answer to">Unprepared</th>
+                <th title="Games in which you played something else">You left it</th>
+              </tr>
+            </thead>
+            <tbody>
+              {playing.length > 0 && (
+                <tr className={picked === 'in-play' ? 'on' : ''} onClick={() => choose('in-play')}>
+                  <td>
+                    <input type="radio" readOnly checked={picked === 'in-play'} /> All in play ({playing.length})
+                  </td>
+                  <td className="num">{i.prep.games}</td>
+                  <td className="num">{i.prep.bookMoves === null ? '–' : i.prep.bookMoves.toFixed(1)}</td>
+                  <td className="num">{i.prep.unprepared.length}</td>
+                  <td className="num">{i.prep.youLeft.length}</td>
+                </tr>
+              )}
+              {rows.map(({ rep, sum }) => (
+                <tr key={rep.id} className={picked === rep.id ? 'on' : ''} onClick={() => choose(rep.id)}>
+                  <td>
+                    <input type="radio" readOnly checked={picked === rep.id} /> {rep.side === 'white' ? '♔' : '♚'} {rep.name}{' '}
+                    {rep.study && <span className="badge">study</span>}
+                  </td>
+                  <td className="num">{sum.games}</td>
+                  <td className="num">{sum.bookMoves === null ? '–' : sum.bookMoves.toFixed(1)}</td>
+                  <td className="num">{sum.unprepared.length}</td>
+                  <td className="num">{sum.youLeft.length}</td>
+                </tr>
               ))}
-            </div>
-            <div className="stack" style={{ gap: 6 }}>
-              <b className="small">Where you left it yourself ({p.youLeft.length})</b>
-              {p.youLeft.length === 0 && <div className="small faint">Never: you played your prepared moves.</div>}
-              {p.youLeft.slice(0, 8).map((y) => (
-                <div key={y.game.id} className="prep-row">
-                  <span className="small">
-                    <b>
-                      {moveNo(y.ply)}
-                      {y.played}
-                    </b>{' '}
-                    instead of {y.expected.join(' or ')}
-                    <span className="faint"> · {gameLabel(y.game)}</span>
-                  </span>
-                  <button className="btn sm ghost" title="Open the game" onClick={() => openGame(y.game.id)}>
-                    <Icon name="games" size={14} />
-                  </button>
-                  <button className="btn sm ghost" title="Open the position in Build" onClick={() => buildAt(y.game.moves.slice(0, y.ply))}>
-                    <Icon name="board" size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
+            </tbody>
+          </table>
           </div>
+          {!playing.length && picked === 'in-play' ? (
+            <div className="small muted">None of your repertoires is marked in play. Pick one above, or mark one as in play on the Overview.</div>
+          ) : (
+            <PrepDetails p={p} name={selected ? selected.rep.name : 'your repertoires in play'} />
+          )}
         </>
       )}
     </div>
+  );
+}
+
+function PrepDetails({ p, name }: { p: PrepSummary; name: string }) {
+  const { openLine, openGame, setActiveRep } = useApp.getState();
+  // Open the position in Build, in the repertoire that has it.
+  const buildAt = (sans: string[], repId?: string) => {
+    const line = lineFromSans(sans);
+    if (!line) return;
+    if (repId) setActiveRep(repId);
+    openLine(line);
+  };
+  if (!p.games) return <div className="small muted">None of these games started in {name}.</div>;
+  return (
+    <>
+      <div className="small">
+        In {plural(p.games, 'game')}, {name} covered the start; the games followed it for <b>{p.bookMoves?.toFixed(1)}</b> moves on average.
+      </div>
+      <div className="prep-cols">
+        <div className="stack" style={{ gap: 6 }}>
+          <b className="small">Replies you have not prepared ({p.unprepared.length})</b>
+          {p.unprepared.length === 0 && <div className="small faint">None: your opponents stayed within your preparation.</div>}
+          {p.unprepared.slice(0, 8).map((u) => (
+            <div key={`${u.key}${u.played}`} className="prep-row">
+              <span className="small">
+                {lastMoves(u.line)} <b>{moveNo(u.ply)}{u.played}</b>
+                <span className="faint"> · {plural(u.count, 'game')}</span>
+              </span>
+              <button className="btn sm ghost" title="Open this position in Build to prepare an answer" onClick={() => buildAt([...u.line, u.played], u.repId)}>
+                <Icon name="board" size={14} /> Prepare
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="stack" style={{ gap: 6 }}>
+          <b className="small">Where you left it yourself ({p.youLeft.length})</b>
+          {p.youLeft.length === 0 && <div className="small faint">Never: you played your prepared moves.</div>}
+          {p.youLeft.slice(0, 8).map((y) => (
+            <div key={y.game.id} className="prep-row">
+              <span className="small">
+                <b>
+                  {moveNo(y.ply)}
+                  {y.played}
+                </b>{' '}
+                instead of {y.expected.join(' or ')}
+                <span className="faint"> · {gameLabel(y.game)}</span>
+              </span>
+              <button className="btn sm ghost" title="Open the game" onClick={() => openGame(y.game.id)}>
+                <Icon name="games" size={14} />
+              </button>
+              <button className="btn sm ghost" title="Open the position in Build" onClick={() => buildAt(y.game.moves.slice(0, y.ply), y.repId)}>
+                <Icon name="board" size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
 

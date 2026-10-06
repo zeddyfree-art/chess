@@ -12,6 +12,8 @@ import { GameReview } from './GameReview';
 import { Icon } from './Icon';
 import { fetchNewLichessGames, hasFetchedBefore, ImportGamesDialog } from './ImportGamesDialog';
 import { InsightsView } from './InsightsView';
+import { themesOf } from '../lib/themes';
+import { ThemeChips } from './ThemeChips';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
@@ -354,7 +356,18 @@ export function ChooseCardsDialog({ suggestions, onClose }: { suggestions: Sugge
                     <span className="muted small">
                       ({formatEval(m.bestEval)} → {formatEval(m.playedEval)})
                       {m.maia ? ` · ${Math.round(m.maia.best * 100)}% find it` : ''}
-                    </span>
+                    </span>{' '}
+                    <ThemeChips
+                      themes={themesOf({
+                        key: m.ply === 0 ? line[0].from : line[m.ply - 1].to,
+                        side: s.game.myColor,
+                        played: line[m.ply].san,
+                        line: m.line,
+                        reply: m.reply,
+                        threat: m.threat,
+                        bestEval: m.bestEval,
+                      })}
+                    />
                   </span>
                 </label>
               );

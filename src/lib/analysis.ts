@@ -280,9 +280,10 @@ export function isMoment(evals: readonly number[], ply: number): boolean {
 /** Below this share of players at your level finding the move, it counts as an engine move: shown, not suggested. */
 export const LEARNABLE = 0.08;
 
-/** Whether a moment is suggested as a training card: learnable at your level (when Maia could tell). */
+/** Whether a moment is suggested as a training card: learnable at your level (when Maia could tell), or a threat
+ *  you overlooked (seeing the threat is the lesson, even when the best answer is hard to find). */
 export function isLearnable(m: KeyMoment): boolean {
-  return !m.maia || m.maia.best >= LEARNABLE;
+  return !m.maia || m.maia.best >= LEARNABLE || !!m.threat?.length;
 }
 
 /** "23.", "23…" */
@@ -323,7 +324,9 @@ export function explainMoment(
     out.push(
       m.maia.best >= LEARNABLE
         ? `About ${share} of players around ${rating} find ${best} here: worth learning.`
-        : `Only ${share} of players around ${rating} find ${best}: more an engine move than something to drill.`,
+        : m.threat?.length
+          ? `Only ${share} of players around ${rating} find ${best}; the lesson here is to see ${moveNo(m.ply + 1)}${m.threat[0]} coming.`
+          : `Only ${share} of players around ${rating} find ${best}: more an engine move than something to drill.`,
     );
   }
   return out;

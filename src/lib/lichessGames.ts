@@ -32,6 +32,8 @@ export interface LichessGameJson {
   opening?: { eco?: string; name?: string };
   moves?: string;
   analysis?: LichessEval[];
+  /** Clock of the mover after each move, in centiseconds (when asked for). */
+  clocks?: number[];
   clock?: { initial: number; increment: number };
   daysPerTurn?: number;
   initialFen?: string;
@@ -97,6 +99,11 @@ export function fromLichessJson(g: LichessGameJson): PgnGame | string {
     termination: TERMINATION[g.status ?? ''],
     moves,
   };
+  if (g.clocks?.length) {
+    // One entry per move; some exports put the starting time first.
+    const c = g.clocks.length === moves.length + 1 ? g.clocks.slice(1) : g.clocks;
+    out.clocks = moves.map((_, i) => (c[i] === undefined ? null : c[i] / 100));
+  }
   if (g.analysis?.length) {
     // analysis[i] is about the position after move i+1, and its `best` about the move that should have been played.
     out.lichessEvals = [null, ...g.analysis.slice(0, moves.length).map(encodeEval)];
@@ -113,7 +120,7 @@ export class LichessUserNotFound extends Error {
 
 /** Downloads a player's games, newest first. */
 export async function fetchLichessGames(q: LichessQuery): Promise<{ games: PgnGame[]; skipped: { reason: string; n: number }[] }> {
-  const params = new URLSearchParams({ moves: 'true', evals: 'true', opening: 'true', clocks: 'false', ongoing: 'false', finished: 'true' });
+  const params = new URLSearchParams({ moves: 'true', evals: 'true', opening: 'true', clocks: 'true', ongoing: 'false', finished: 'true' });
   if (q.since) params.set('since', String(q.since));
   if (q.max) params.set('max', String(q.max));
   if (q.speeds?.length) params.set('perfType', q.speeds.join(','));

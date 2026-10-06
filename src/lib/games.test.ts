@@ -240,3 +240,48 @@ describe('syncing games', () => {
     expect(sameGames(x, data([g('a'), g('b')]))).toBe(false);
   });
 });
+
+describe('clocks and export', () => {
+  it('reads [%clk] from a PGN and works out the time per move', async () => {
+    const { parsePgnGames, moveTime, formatClock } = await import('./games');
+    const pgn = '[White "a"]\n[Black "b"]\n[TimeControl "180+2"]\n\n1. e4 { [%clk 0:03:00] } e5 { [%clk 0:03:00] } 2. Nf3 { [%clk 0:02:55] } Nc6 { [%clk 0:02:41.5] } *';
+    const g = parsePgnGames(pgn).games[0];
+    expect(g.clocks).toEqual([180, 180, 175, 161.5]);
+    const pg = { clocks: g.clocks, timeControl: g.timeControl };
+    expect(moveTime(pg, 2)).toEqual({ spent: 7, left: 175 });
+    expect(moveTime(pg, 3)).toEqual({ spent: 20.5, left: 161.5 });
+    expect(formatClock(161.5)).toBe('2:42');
+  });
+
+  it('takes Lichess clocks (centiseconds), with or without the starting time first', () => {
+    const base = { id: 'x', variant: 'standard', status: 'resign', players: { white: { user: { name: 'a', id: 'a' } }, black: { user: { name: 'b', id: 'b' } } }, moves: 'e4 e5 Nf3' };
+    const a = fromLichessJson({ ...base, clocks: [18000, 18000, 17500] }) as { clocks?: number[] };
+    const b = fromLichessJson({ ...base, clocks: [18000, 18000, 18000, 17500] }) as { clocks?: number[] };
+    expect(a.clocks).toEqual([180, 180, 175]);
+    expect(b.clocks).toEqual([180, 180, 175]);
+  });
+
+  it('exports mistake cards as PGN that reads back', async () => {
+    const { mistakesToPgn } = await import('./mistakes');
+    const { parsePgn, startingPosition } = await import('chessops/pgn');
+    const { parseSan } = await import('chessops/san');
+    const game = daily();
+    const c = cardFromMoment(game, { ply: 44, kind: 'miss', loss: 20, best: ['fxg5'], line: ['fxg5', 'Qe7', 'gxh6'], bestEval: 497, playedEval: 181, reply: ['a5', 'fxg5'] }, 1300);
+    const c2 = cardFromMoment({ ...game, myColor: 'black' }, { ply: 55, kind: 'mistake', loss: 12, best: ['Rc8'], line: ['Rc8', 'Qxa6'], bestEval: 7, playedEval: 149 }, 1300);
+    const pgn = mistakesToPgn([c, c2]);
+    const games = parsePgn(pgn);
+    expect(games).toHaveLength(2);
+    for (const g of games) {
+      const pos = startingPosition(g.headers).unwrap();
+      for (const node of g.moves.mainline()) {
+        const m = parseSan(pos, node.san);
+        expect(m, node.san).toBeTruthy();
+        pos.play(m!);
+      }
+    }
+    expect(pgn).toContain('23. fxg5!');
+    expect(pgn).toContain('( 23. e4??');
+    expect(pgn).toContain('28... Rc8!');
+    expect(pgn).toContain('( 28... Qd4+?');
+  });
+});

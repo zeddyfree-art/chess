@@ -59,8 +59,8 @@ export function AboutView({ standalone = false }: { standalone?: boolean }) {
           <dd>
             The games you played, from Lichess or a PGN file, analysed on your device: where it went wrong, what was better and
             whether players at your level find it. The mistakes you pick become a deck of their own in Train, and Insights shows
-            what all your games say together: your weakest phase, what kind of moves you miss, and the replies your repertoire still
-            lacks.
+            what all your games say together: your weakest phase, the tactical themes and the clock behind your mistakes, and the
+            replies your repertoires in play still lack.
           </dd>
         </dl>
       </section>

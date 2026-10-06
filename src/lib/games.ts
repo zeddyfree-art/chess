@@ -1,6 +1,6 @@
 // Games you played (imported from Lichess or a PGN file), kept apart from the repertoires: they are
 // stored per player, analysed by the engine (analysis.ts) and turned into training cards on request.
-import { parsePgn, type Game, type PgnNodeData } from 'chessops/pgn';
+import { parseComment, parsePgn, type Game, type PgnNodeData } from 'chessops/pgn';
 import { START_KEY, playSan, type PlayedMove, type Side } from './chess';
 import type { GameAnalysis } from './analysis';
 
@@ -39,6 +39,8 @@ export interface PlayedGame {
   lichessEvals?: (number | null)[];
   /** Lichess' better move for the position before each move, where it gave one (UCI). */
   lichessBest?: (string | null)[];
+  /** Seconds left on the mover's clock after each move, where known (Lichess clocks, PGN [%clk]). */
+  clocks?: (number | null)[];
   /** Mistakes (by half-move index) you chose not to train, so they are not suggested again. */
   dismissed?: number[];
 }
@@ -136,6 +138,7 @@ export interface PgnGame {
   moves: string[];
   lichessEvals?: (number | null)[];
   lichessBest?: (string | null)[];
+  clocks?: (number | null)[];
 }
 
 export interface PgnGamesResult {
@@ -195,12 +198,16 @@ function fromPgnGame(g: Game<PgnNodeData>): PgnGame | string {
   if (h.get('FEN') || h.get('SetUp') === '1') return 'not from the starting position';
 
   const moves: string[] = [];
+  const clocks: (number | null)[] = [];
   let key = START_KEY;
   for (const node of g.moves.mainline()) {
     const m = playSan(key, node.san);
     if (!m) return moves.length ? 'an illegal move' : 'no moves';
     moves.push(m.san);
     key = m.to;
+    let clock: number | null = null;
+    for (const c of node.comments ?? []) clock = parseComment(c).clock ?? clock;
+    clocks.push(clock);
   }
   if (moves.length < 2) return 'fewer than two moves';
 
@@ -226,6 +233,7 @@ function fromPgnGame(g: Game<PgnNodeData>): PgnGame | string {
     eco: h.get('ECO'),
     termination: h.get('Termination'),
     moves,
+    ...(clocks.some((c) => c !== null) ? { clocks } : {}),
   };
 }
 
@@ -266,4 +274,28 @@ export function toPlayedGame(g: PgnGame, profileId: string, myColor: Side, sourc
   const now = Date.now();
   const { sourceId, ...rest } = g;
   return { ...rest, id: gameId(profileId, sourceId), profileId, source, myColor, addedAt: now, updatedAt: now };
+}
+
+/** Starting time and increment in seconds, from a TimeControl like "180+2" (null for daily games or unknown). */
+export function clockSettings(tc: string | undefined): { base: number; inc: number } | null {
+  const m = /^(\d+)(?:\+(\d+))?$/.exec(tc ?? '');
+  return m ? { base: Number(m[1]), inc: Number(m[2] ?? 0) } : null;
+}
+
+/** Seconds the mover spent on move `ply`, and what was left after it; null when the clocks are not known. */
+export function moveTime(g: Pick<PlayedGame, 'clocks' | 'timeControl'>, ply: number): { spent: number; left: number } | null {
+  const tc = clockSettings(g.timeControl);
+  const after = g.clocks?.[ply];
+  if (!tc || after == null) return null;
+  const before = ply >= 2 ? g.clocks?.[ply - 2] : tc.base;
+  if (before == null) return null;
+  return { spent: Math.max(0, before - after + tc.inc), left: after };
+}
+
+export function formatClock(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 }

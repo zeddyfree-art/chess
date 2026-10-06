@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatEval, moveNo } from '../lib/analysis';
 import { lineFromSans, moveFromBoard, playSan, sanToUci, START_KEY, uciToArrow } from '../lib/chess';
-import { explainCard, mistakeCounts, mistakeQueue, type MistakeCard } from '../lib/mistakes';
+import { nullMoveKey } from '../lib/analyzer';
+import { isGoodToo } from '../lib/checkMove';
+import { explainCard, mistakeCounts, mistakeQueue, mistakesToPgn, type MistakeCard } from '../lib/mistakes';
+import { downloadText } from '../lib/download';
 import { formatInterval, Rating } from '../lib/srs';
 import { activeRep, useApp } from '../lib/store';
 import { saveNow, type SaveResult } from '../lib/sync';
@@ -9,6 +12,11 @@ import { Board, sideCircle, type Shape } from './Board';
 import { Icon } from './Icon';
 import { SavedNote, saveMessage } from './SaveIndicator';
 import { PositionLinks, useFlash } from './TrainView';
+import { themesOf } from '../lib/themes';
+import { ThemeChips } from './ThemeChips';
+
+const cardThemes = (c: MistakeCard) =>
+  themesOf({ key: c.key, side: c.side, played: c.played, line: c.answer, reply: c.reply, threat: c.threat, bestEval: c.bestEval });
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
@@ -102,9 +110,28 @@ export function MistakesTrain() {
       </div>
       {cards.length > 0 && (
         <div className="card card-pad stack">
-          <div className="row">
+          <div className="row wrap">
             <h3>Your cards</h3>
             <span className="spacer" />
+            <button
+              className="btn sm ghost"
+              title="All cards as one PGN file: one chapter per card, for a Lichess study (Study → Add chapter → PGN; up to 64 per study) or any chess program"
+              onClick={() => downloadText(`my-mistakes-${new Date().toISOString().slice(0, 10)}.pgn`, mistakesToPgn(cards), 'application/x-chess-pgn')}
+            >
+              <Icon name="download" size={14} /> PGN
+            </button>
+            <button
+              className="btn sm ghost"
+              title="Copy all cards as PGN, to paste into a Lichess study"
+              onClick={() =>
+                navigator.clipboard?.writeText(mistakesToPgn(cards)).then(
+                  () => useApp.getState().showToast(`${plural(cards.length, 'card')} copied as PGN`),
+                  () => useApp.getState().showToast('Could not copy'),
+                )
+              }
+            >
+              <Icon name="copy" size={14} /> Copy
+            </button>
             <button className="btn sm ghost" onClick={() => setShowAll((x) => !x)}>
               {showAll ? 'Hide' : `Show all ${cards.length}`}
             </button>
@@ -139,7 +166,7 @@ function CardList({ cards }: { cards: MistakeCard[] }) {
                 {moveNo(c.line.length)}
                 {c.played}
               </b>{' '}
-              → {c.best[0]}{' '}
+              → {c.best[0]} <ThemeChips themes={cardThemes(c)} />{' '}
               <span className="small muted">
                 {c.games[0]?.label}
                 {c.games.length > 1 ? ` (+${c.games.length - 1})` : ''}
@@ -178,7 +205,11 @@ function MistakeSession({ initial, onExit }: { initial: MistakeCard[]; onExit: (
   const card = item ? (cards.find((c) => c.id === item.id) ?? initial.find((c) => c.id === item.id)) : undefined;
   const [pos, setPos] = useState(START_KEY);
   const [lastMove, setLastMove] = useState<[string, string] | null>(null);
-  const [phase, setPhase] = useState<'intro' | 'await' | 'wrong' | 'good' | 'revealed' | 'done'>('intro');
+  // threat: first say what the opponent threatens (cards of overlooked threats); checking: the engine looks at your move.
+  const [phase, setPhase] = useState<'intro' | 'threat' | 'await' | 'checking' | 'wrong' | 'good' | 'revealed' | 'done'>('intro');
+  const [threatOk, setThreatOk] = useState<boolean | null>(null);
+  const [goodToo, setGoodToo] = useState(false);
+  const checkSeq = useRef(0);
   const [graded, setGraded] = useState(false);
   const [hinted, setHinted] = useState(false);
   const [tried, setTried] = useState<string | null>(null);
@@ -208,14 +239,18 @@ function MistakeSession({ initial, onExit }: { initial: MistakeCard[]; onExit: (
     setHinted(false);
     setTried(null);
     setShapes([]);
+    setThreatOk(null);
+    setGoodToo(false);
+    checkSeq.current++;
     const last = path.at(-1);
     setPos(last ? last.from : START_KEY);
     setLastMove(path.length > 1 ? uciToArrow(path[path.length - 2].uci) : null);
     setPhase('intro');
+    const nullKey = card.threat?.length && !item.retry ? nullMoveKey(card.key) : null;
     later(() => {
-      setPos(card.key);
+      setPos(nullKey ?? card.key);
       setLastMove(last ? uciToArrow(last.uci) : null);
-      setPhase('await');
+      setPhase(nullKey ? 'threat' : 'await');
     }, last ? 500 : 50);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, card?.id]);
@@ -244,35 +279,99 @@ function MistakeSession({ initial, onExit }: { initial: MistakeCard[]; onExit: (
     return best ? [{ orig: uciToArrow(best)[0], dest: uciToArrow(best)[1], brush: 'engine' } as Shape] : [];
   };
 
+  const threatArrow = (): Shape[] => {
+    const nullKey = card ? nullMoveKey(card.key) : null;
+    const uci = nullKey && card?.threat?.[0] ? sanToUci(nullKey, card.threat[0]) : null;
+    return uci ? [{ orig: uciToArrow(uci)[0], dest: uciToArrow(uci)[1], brush: 'red' } as Shape] : [];
+  };
+
+  const backToPosition = (keep: Shape[] = []) => {
+    if (!card) return;
+    setPos(card.key);
+    setLastMove(path.length ? uciToArrow(path[path.length - 1].uci) : null);
+    setShapes(keep);
+  };
+
+  const accept = (san: string, alsoGood: boolean) => {
+    if (!card) return;
+    triggerFlash('flash-good');
+    // A missed threat costs the card its "good": seeing the threat is the point of it.
+    const due = grade(threatOk === false ? Rating.Again : hinted ? Rating.Hard : Rating.Good);
+    if (due !== null) {
+      if (threatOk === false) {
+        setScore((s) => ({ ...s, bad: s.bad + 1 }));
+        setQueue((q) => [...q, { id: card.id, retry: true }]);
+      } else setScore((s) => ({ ...s, good: s.good + 1 }));
+    }
+    setTried(san);
+    setGoodToo(alsoGood);
+    setPhase('good');
+    setShapes(showAnswer());
+  };
+
+  const reject = () => {
+    if (!card) return;
+    triggerFlash('flash-bad');
+    // Saw the threat but not the answer: partly right.
+    if (grade(threatOk ? Rating.Hard : Rating.Again) !== null) {
+      setScore((s) => ({ ...s, bad: s.bad + 1 }));
+      setQueue((q) => [...q, { id: card.id, retry: true }]);
+    }
+    setPhase('wrong');
+    later(() => backToPosition(threatOk === false ? threatArrow() : []), 800);
+  };
+
   const onMove = (orig: string, dest: string) => {
-    if (!card || (phase !== 'await' && phase !== 'wrong')) return;
+    if (!card) return;
+    if (phase === 'threat') {
+      const nullKey = nullMoveKey(card.key);
+      const m = nullKey ? moveFromBoard(nullKey, orig, dest) : null;
+      if (!m) return;
+      const plain = (x: string) => x.replace(/[+#]/g, '');
+      const ok = plain(m.san) === plain(card.threat![0]);
+      setThreatOk(ok);
+      setTried(m.san);
+      setPos(m.to);
+      setLastMove(uciToArrow(m.uci));
+      triggerFlash(ok ? 'flash-good' : 'flash-bad');
+      setPhase('intro');
+      later(() => {
+        backToPosition(threatArrow());
+        setTried(null);
+        setPhase('await');
+      }, ok ? 1200 : 1800);
+      return;
+    }
+    if (phase !== 'await' && phase !== 'wrong') return;
     const m = moveFromBoard(card.key, orig, dest);
     if (!m) return;
     setTried(m.san);
     setPos(m.to);
     setLastMove(uciToArrow(m.uci));
-    if (card.best.includes(m.san)) {
-      triggerFlash('flash-good');
-      const due = grade(hinted ? Rating.Hard : Rating.Good);
-      if (due !== null) setScore((s) => ({ ...s, good: s.good + 1 }));
-      setPhase('good');
-      setShapes(showAnswer());
-    } else {
-      triggerFlash('flash-bad');
-      if (grade(Rating.Again) !== null) {
-        setScore((s) => ({ ...s, bad: s.bad + 1 }));
-        setQueue((q) => [...q, { id: card.id, retry: true }]);
-      }
-      setPhase('wrong');
-      later(() => {
-        setPos(card.key);
-        setLastMove(path.length ? uciToArrow(path[path.length - 1].uci) : null);
-      }, 800);
-    }
+    setShapes([]);
+    if (card.best.includes(m.san)) return accept(m.san, false);
+    if (m.san === card.played) return reject();
+    // Not one of the stored good moves: ask the engine whether it is good too.
+    setPhase('checking');
+    const seq = ++checkSeq.current;
+    isGoodToo(m.to, card.side, card.bestEval)
+      .then((r) => {
+        if (seq !== checkSeq.current) return;
+        if (r?.good) accept(m.san, true);
+        else reject();
+      })
+      .catch(() => seq === checkSeq.current && reject());
   };
 
   const reveal = () => {
     if (!card) return;
+    if (phase === 'threat') {
+      // Show the threat, then on to the move.
+      setThreatOk(false);
+      backToPosition(threatArrow());
+      setPhase('await');
+      return;
+    }
     if (grade(Rating.Again) !== null) {
       setScore((s) => ({ ...s, bad: s.bad + 1 }));
       setQueue((q) => [...q, { id: card.id, retry: true }]);
@@ -342,7 +441,7 @@ function MistakeSession({ initial, onExit }: { initial: MistakeCard[]; onExit: (
           className={flash}
           position={pos}
           orientation={card.side}
-          movable={phase === 'await' || phase === 'wrong' ? card.side : null}
+          movable={phase === 'await' || phase === 'wrong' ? card.side : phase === 'threat' ? (card.side === 'white' ? 'black' : 'white') : null}
           lastMove={lastMove}
           shapes={shapes}
           onMove={onMove}
@@ -365,9 +464,29 @@ function MistakeSession({ initial, onExit }: { initial: MistakeCard[]; onExit: (
             {card.games.length > 1 ? ` and ${plural(card.games.length - 1, 'other game')}` : ''}
           </div>
           <div className={`feedback ${phase === 'good' ? 'good' : phase === 'wrong' ? 'bad' : 'info'}`}>
-            {phase === 'good' ? (
+            {phase === 'threat' ? (
               <>
-                {tried}! {tried === card.best[0] ? 'That is the move.' : `Good too (the engine’s first choice is ${card.best[0]}).`}
+                You played {no}
+                {card.played} here. First: what was your opponent threatening? Play their move.
+              </>
+            ) : phase === 'intro' && threatOk !== null ? (
+              threatOk ? (
+                <>Yes: {card.threat![0]} was the threat. Now find a move that deals with it.</>
+              ) : (
+                <>
+                  Not quite: the threat was {card.threat![0]} (red arrow). Now find a move that deals with it.
+                </>
+              )
+            ) : phase === 'checking' ? (
+              <>Checking {tried} with the engine…</>
+            ) : phase === 'good' ? (
+              <>
+                {tried}!{' '}
+                {tried === card.best[0]
+                  ? 'That is the move.'
+                  : goodToo
+                    ? `The engine rates it about as strong as ${card.best[0]}.`
+                    : `Good too (the engine’s first choice is ${card.best[0]}).`}
               </>
             ) : phase === 'revealed' ? (
               <>
@@ -378,10 +497,12 @@ function MistakeSession({ initial, onExit }: { initial: MistakeCard[]; onExit: (
               tried === card.played ? (
                 <>That is what you played in the game. Look for something better.</>
               ) : (
-                <>{tried} is not it. Try again.</>
+                <>{tried} is not good enough. Try again.</>
               )
             ) : item.retry ? (
               <>Once more: what is better than {card.played}?</>
+            ) : threatOk !== null ? (
+              <>Now find a move that deals with {card.threat![0]}.</>
             ) : (
               <>
                 You played {no}
@@ -391,6 +512,7 @@ function MistakeSession({ initial, onExit }: { initial: MistakeCard[]; onExit: (
           </div>
           {finished && (
             <div className="stack" style={{ gap: 4 }}>
+              <ThemeChips themes={cardThemes(card)} />
               {explainCard(card).map((t, i) => (
                 <div key={i} className="small">
                   {t}
@@ -404,11 +526,11 @@ function MistakeSession({ initial, onExit }: { initial: MistakeCard[]; onExit: (
           <div className="row wrap">
             {!finished ? (
               <>
-                <button className="btn" onClick={hint} disabled={hinted || phase === 'intro'}>
+                <button className="btn" onClick={hint} disabled={hinted || phase !== 'await'}>
                   <Icon name="hint" size={16} /> Hint
                 </button>
-                <button className="btn" onClick={reveal} disabled={phase === 'intro'}>
-                  Show the move
+                <button className="btn" onClick={reveal} disabled={phase === 'intro' || phase === 'checking'}>
+                  {phase === 'threat' ? 'Show the threat' : 'Show the move'}
                 </button>
               </>
             ) : (

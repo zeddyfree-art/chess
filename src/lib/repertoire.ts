@@ -46,6 +46,9 @@ export interface Repertoire {
   shapes?: Record<string, string[]>;
   cards: Record<string, SrsCard>;
   engine: Record<string, EngineFlag>;
+  /** A study repertoire: trained, but not one you play now, so your games are not checked against it.
+   *  Absent (the default) means "in play". */
+  study?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -132,8 +135,17 @@ export function onlyCardsChanged(a: Repertoire, b: Repertoire): boolean {
     a.engine === b.engine &&
     a.name === b.name &&
     a.side === b.side &&
-    a.profileId === b.profileId
+    a.profileId === b.profileId &&
+    !!a.study === !!b.study
   );
+}
+
+/** In play: a repertoire you play now; your games are checked against it. */
+export const inPlay = (r: Repertoire) => !r.study;
+
+export function setStudy(rep: Repertoire, study: boolean): Repertoire {
+  const { study: _old, ...rest } = rep;
+  return study ? { ...rest, study: true, updatedAt: Date.now() } : { ...rest, updatedAt: Date.now() };
 }
 
 /** Sets the arrows and circles shown on a position; an empty list removes them. */

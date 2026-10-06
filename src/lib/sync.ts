@@ -143,7 +143,8 @@ export function classify(a: AppData, b: AppData): 'none' | 'training' | 'edit' {
       x.shapes !== y.shapes ||
       x.engine !== y.engine ||
       x.name !== y.name ||
-      x.side !== y.side
+      x.side !== y.side ||
+      !!x.study !== !!y.study
     ) {
       return 'edit';
     }
