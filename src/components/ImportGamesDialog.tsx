@@ -25,6 +25,41 @@ interface Prefs {
 }
 
 const prefsKey = (profileId: string) => `games-import-${profileId}`;
+const fetchedKey = (profileId: string) => `lichess-fetched-${profileId}`;
+
+function markFetched(profileId: string, at: number) {
+  try {
+    localStorage.setItem(fetchedKey(profileId), String(at));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Fetches the games played since the last fetch (with the time controls chosen then). Null: never fetched here. */
+export async function fetchNewLichessGames(profile: Profile): Promise<{ added: number } | null> {
+  const user = profile.lichess;
+  const last = Number(localStorage.getItem(fetchedKey(profile.id)) ?? 0);
+  if (!user || !last) return null;
+  const prefs = readPrefs(profile.id);
+  // Lichess filters on when a game started: look back further for daily games, which can last weeks.
+  const overlap = (prefs.speeds.includes('correspondence') ? 60 : 2) * 86_400_000;
+  const started = Date.now();
+  const { games } = await fetchLichessGames({ username: user, since: last - overlap, speeds: prefs.speeds, ratedOnly: prefs.ratedOnly });
+  markFetched(profile.id, started);
+  const mine = games.flatMap((g) => {
+    const color = colorOf(g, [user]);
+    return color ? [toPlayedGame(g, profile.id, color, 'lichess')] : [];
+  });
+  return { added: useGames.getState().addGames(mine).added };
+}
+
+export function hasFetchedBefore(profileId: string): boolean {
+  try {
+    return !!localStorage.getItem(fetchedKey(profileId));
+  } catch {
+    return false;
+  }
+}
 
 function readPrefs(profileId: string): Prefs {
   try {
@@ -90,6 +125,7 @@ function LichessImport({ profile, onClose }: { profile: Profile; onClose: () => 
     setDone(null);
     setCount(0);
     abort.current = new AbortController();
+    const started = Date.now();
     try {
       const days = PERIODS.find((p) => p.id === prefs.period)!.days;
       const { games, skipped } = await fetchLichessGames({
@@ -102,6 +138,7 @@ function LichessImport({ profile, onClose }: { profile: Profile; onClose: () => 
         onProgress: setCount,
       });
       if (profile.lichess !== name) updateProfile(profile.id, { lichess: name });
+      markFetched(profile.id, started);
       const mine = games.flatMap((g) => {
         const color = colorOf(g, [name]);
         return color ? [toPlayedGame(g, profile.id, color, 'lichess')] : [];
@@ -199,7 +236,11 @@ function LichessImport({ profile, onClose }: { profile: Profile; onClose: () => 
         Newest first. Games Lichess has already analysed come with its evaluations, so they are ready sooner. Your games are public on
         Lichess, so no login is needed.
       </div>
-      {busy && <div className="small muted">Downloading… {count > 0 && `${plural(count, 'game')} so far`}</div>}
+      {busy && (
+        <div className="small muted">
+          Downloading… {count > 0 && `${plural(count, 'game')} so far`} (keep this window open; it takes a few seconds)
+        </div>
+      )}
       {error && <div className="notice error small">{error}</div>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <button className="btn ghost" onClick={() => (busy ? abort.current?.abort() : onClose())}>

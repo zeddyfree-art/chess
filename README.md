@@ -29,7 +29,7 @@ Live: <https://zeddyfree-art.github.io/chess/> · [About](https://zeddyfree-art.
 | **Tree** | The whole repertoire as a diagram. Green = your move, outlined = opponent move with how often it is played; line thickness = popularity; red dashed nodes = **gaps** (played often, not prepared). Collapse/expand per branch or to a depth, highlight due / dubious / rare moves. Select a node to open it, train or play from it, or **Prune branch** (Delete) — you see beforehand how many moves and cards disappear, and everything can be undone (Ctrl+Z). |
 | **Train** | Two decks: your repertoire and **My mistakes** (positions from your own games, see below). FSRS spaced repetition: each move you play is a card. New moves are shown first and quizzed again later in the session. **Practice lines** plays random lines through without affecting the schedule. Scoped to one branch when started with *Train from here* (review, drill the whole branch, or practice lines). From any card, **Open in Build** shows that position on the build board and **Analyse on Lichess** opens it on the Lichess analysis board. |
 | **Play** | Practice games against **Maia-3**, a human-like neural network, at any strength from 600 to 2600. In the opening it plays what people at that level actually play (Lichess database) or sticks to your prepared lines; afterwards it plays like a human of that rating. Tells you when you (or it) leave your repertoire; take back, copy PGN, analyse on Lichess, or open the game in Build to add moves. |
-| **Games** | The games you played, fetched from Lichess (period: last week, month, year or all; choose the time controls) or added from a PGN file (Chess.com, over the board). Each game is analysed on your device: an evaluation graph with the opening, middlegame and endgame, accuracy per phase, your blunders, mistakes and misses, and per mistake what was better, why, and how many players at your level would have found it. **Find a better move** lets you try again; **Train this** makes it a card; **Play from here vs Maia** plays any position of the game, or the better move, against the human-like opponent. |
+| **Games** | The games you played, fetched from Lichess (period: last week, month, year or all; choose the time controls) or added from a PGN file (Chess.com, over the board). Each game is analysed on your device: an evaluation graph with the opening, middlegame and endgame, accuracy per phase, your blunders, mistakes and misses, and per mistake what was better, why, and how many players at your level would have found it. **Find a better move** lets you try again; **Train this** makes it a card; **Play from here vs Maia** plays any position of the game, or the better move, against the human-like opponent. Each game also shows where it left your repertoire. **Insights** sums up all your analysed games (see below); **Fetch new** gets the Lichess games played since the last fetch. |
 | **Check** | **Find gaps**: walks your repertoire against the Lichess database (the player's rating groups and time controls) and sorts missing replies by how often you'll meet them, with a coverage percentage. **Engine check**: rates each of your moves (?!, ?, ??) with the Lichess cloud evaluation or local Stockfish 19. |
 | **Settings** | Players (name, own rating, colour, rating groups, time controls, Lichess username, the names you use in PGN files), Google Drive sync and backups, Lichess connection, PGN export/import per repertoire, backup file download/restore. |
 
@@ -132,7 +132,10 @@ period and time controls; games Lichess has already analysed come with its evalu
 works for any site: the app asks which player is you (it guesses the name that appears in most games) and remembers that name.
 
 **The analysis** runs on your device, one game at a time in the background, while the app is open: about half a minute per
-game on a laptop, a minute or more on a phone. It pauses while you play a practice game.
+game on a laptop, a minute or more on a phone. It pauses while you play a practice game. You can switch tabs and use the
+rest of the app meanwhile; the top bar shows how many games are left. Closing the app (or a phone locking its screen or
+switching apps) pauses it, and it carries on by itself the next time you open the app: finished games are kept, at most the
+game in progress starts again. On devices that allow it you can tick *Keep the screen on until it is done*.
 
 1. Every position gets a quick Stockfish 19 evaluation (depth 14).
 2. Your worst moves are looked at again, deeper (depth 18) and with the three best moves, so the verdict and the list of
@@ -153,6 +156,21 @@ thinned out, the endgame at six.
 with the learnable ones ticked. A card is the position from your game: "You played 23.e4 here. Find a better move." Any move
 the engine rates as good counts. Cards are scheduled with FSRS like your repertoire, synced with it, and after each card you
 can play the position out against Maia. One position is one card, however many games it came up in.
+
+**Insights** (Games → Insights) puts your analysed games together, for a period (last week, month, 3 months, year, all),
+time controls and colour of your choice, and always says how many games it rests on:
+
+- score, your accuracy against your opponents', big mistakes (blunders and misses) per game, and how many clearly won
+  positions (75%+ to win, about +3) you converted;
+- **by phase**: your accuracy against your opponents' in the opening, middlegame and endgame, and big mistakes per 10 moves;
+- **where games turned**: the phase of your biggest mistake in each game you lost (and of your opponent's in each you won);
+- **your mistakes**: missed chances (after your opponent's mistake), overlooked threats and other mistakes, and whether the
+  better move was a capture, a check or a quiet move, with a matching habit to work on;
+- **accuracy over time**, game by game with the average of the last ten (click a game to open it);
+- **openings**: score and opening accuracy per opening and colour;
+- **your repertoire in your games**: how long you followed it, the replies your opponents played that you have not prepared
+  (with **Prepare**, which opens that position in Build), and where you left it yourself. Like Chess.com's course check, but
+  against your own repertoire.
 
 **Limits worth knowing.** A position from the middlegame rarely comes back move for move, so a card helps through its
 pattern ("the knight left the f-file, now take on f7"); read the explanation after each card. Accuracy is a noisy number for

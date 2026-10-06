@@ -6,6 +6,7 @@ import { configureQueue, kickQueue, needsAnalysis, needsMaia, queueStateChanged,
 import type { GameAnalysis } from './analysis';
 import { EMPTY_GAMES, type GamesData, type PlayedGame } from './games';
 import { profileRating, useApp } from './store';
+import { initWakeLock } from './wakeLock';
 
 interface GamesState {
   loaded: boolean;
@@ -201,6 +202,7 @@ export async function loadGames() {
     holdQueue(s.view === 'play');
   });
   holdQueue(useApp.getState().view === 'play');
+  initWakeLock();
   kickQueue();
 }
 

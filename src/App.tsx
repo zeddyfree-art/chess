@@ -4,7 +4,7 @@ import { AuditView } from './components/AuditView';
 import { Footer } from './components/Footer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BuildView } from './components/BuildView';
-import { GamesView } from './components/GamesView';
+import { AnalysisPill, GamesView } from './components/GamesView';
 import { HomeView, NewRepertoireDialog } from './components/HomeView';
 import { Icon, type IconName } from './components/Icon';
 import { PlayView } from './components/PlayView';
@@ -226,6 +226,7 @@ function TopBar() {
 
       {/* Right: always visible, whatever the window width. */}
       <div className="topbar-right">
+        <AnalysisPill />
         <SaveIndicator />
         <SyncButton />
         <button className="btn icon ghost" disabled={!canUndo} onClick={undoLast} title="Undo (Ctrl+Z)">

@@ -6,10 +6,12 @@ import { gameLabel, gameLine, outcome, SPEED_NAMES, type GameSpeed, type PlayedG
 import { gamesOf, useGames } from '../lib/gamesStore';
 import { cardFromMoment, mistakeId } from '../lib/mistakes';
 import { activeProfile, useApp } from '../lib/store';
+import { keepAwakeWanted, setKeepAwake, wakeLockSupported } from '../lib/wakeLock';
 import { Dialog } from './Dialog';
 import { GameReview } from './GameReview';
 import { Icon } from './Icon';
-import { ImportGamesDialog } from './ImportGamesDialog';
+import { fetchNewLichessGames, hasFetchedBefore, ImportGamesDialog } from './ImportGamesDialog';
+import { InsightsView } from './InsightsView';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
@@ -56,6 +58,29 @@ function GamesList() {
   const [choosing, setChoosing] = useState(false);
   const [speed, setSpeed] = useState<GameSpeed | null>(null);
   const [limit, setLimit] = useState(60);
+  const [tab, setTabState] = useState<'games' | 'insights'>(() => (localStorage.getItem('games-tab') === 'insights' ? 'insights' : 'games'));
+  const [fetching, setFetching] = useState(false);
+  const setTab = (t: 'games' | 'insights') => {
+    setTabState(t);
+    try {
+      localStorage.setItem('games-tab', t);
+    } catch {
+      /* ignore */
+    }
+  };
+  const showToast = useApp((s) => s.showToast);
+  const fetchNew = async () => {
+    setFetching(true);
+    try {
+      const r = await fetchNewLichessGames(profile);
+      if (!r) setImporting(true);
+      else showToast(r.added ? `${plural(r.added, 'new game')} from Lichess. Analysing…` : 'No new games on Lichess.');
+    } catch (e) {
+      showToast((e as Error).message);
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const cardIds = useMemo(() => new Set((mistakes ?? []).map((m) => m.id)), [mistakes]);
   const suggestions = useMemo(() => suggestionsFor(games, cardIds), [games, cardIds]);
@@ -71,10 +96,25 @@ function GamesList() {
           <h2>Games</h2>
           <span className="muted">{profile.name}</span>
           <span className="spacer" />
+          {profile.lichess && hasFetchedBefore(profile.id) && (
+            <button className="btn" disabled={fetching} onClick={fetchNew} title={`New games of ${profile.lichess} since the last fetch`}>
+              <Icon name="refresh" size={16} /> {fetching ? 'Fetching…' : 'Fetch new'}
+            </button>
+          )}
           <button className="btn primary" onClick={() => setImporting(true)}>
             <Icon name="download" size={16} /> Add games
           </button>
         </div>
+        {games.length > 0 && (
+          <div className="deck-tabs view-tabs" role="tablist">
+            <button role="tab" aria-selected={tab === 'games'} className={tab === 'games' ? 'on' : ''} onClick={() => setTab('games')}>
+              Games <span className="faint">{games.length}</span>
+            </button>
+            <button role="tab" aria-selected={tab === 'insights'} className={tab === 'insights' ? 'on' : ''} onClick={() => setTab('insights')}>
+              Insights
+            </button>
+          </div>
+        )}
 
         {games.length === 0 ? (
           <div className="empty stack" style={{ gap: 10 }}>
@@ -91,27 +131,8 @@ function GamesList() {
           </div>
         ) : (
           <>
-            {(waiting > 0 || queue.error) && (
-              <div className="notice small row wrap">
-                {queue.error ? (
-                  <span style={{ flex: 1 }}>{queue.error}</span>
-                ) : (
-                  <span style={{ flex: 1 }}>
-                    {queue.paused
-                      ? `Analysis paused · ${plural(waiting, 'game')} to go.`
-                      : queue.held
-                        ? `Analysis waits while you play · ${plural(waiting, 'game')} to go.`
-                        : current
-                          ? `Analysing ${gameLabel(current)} · ${Math.round(queue.progress * 100)}% · ${plural(waiting, 'game')} to go`
-                          : `${plural(waiting, 'game')} waiting for analysis.`}
-                  </span>
-                )}
-                <button className="btn sm" onClick={() => pauseQueue(!queue.paused)}>
-                  {queue.paused || queue.error ? 'Resume' : 'Pause'}
-                </button>
-              </div>
-            )}
-            {suggestions.length > 0 && (
+            {(waiting > 0 || queue.error) && <AnalysisNotice waiting={waiting} current={current} />}
+            {tab === 'games' && suggestions.length > 0 && (
               <div className="notice row wrap suggest-banner">
                 <Icon name="target" size={16} />
                 <span style={{ flex: 1 }}>
@@ -122,7 +143,7 @@ function GamesList() {
                 </button>
               </div>
             )}
-            {speeds.length > 1 && (
+            {tab === 'games' && speeds.length > 1 && (
               <div className="filter-row">
                 <span className={`chip ${speed === null ? 'on' : ''}`} onClick={() => setSpeed(null)}>
                   All ({games.length})
@@ -134,12 +155,14 @@ function GamesList() {
                 ))}
               </div>
             )}
-            <div className="game-list">
-              {shown.slice(0, limit).map((g) => (
-                <GameRow key={g.id} game={g} analysing={queue.current === g.id} />
-              ))}
-            </div>
-            {shown.length > limit && (
+            {tab === 'games' && (
+              <div className="game-list">
+                {shown.slice(0, limit).map((g) => (
+                  <GameRow key={g.id} game={g} analysing={queue.current === g.id} />
+                ))}
+              </div>
+            )}
+            {tab === 'games' && shown.length > limit && (
               <button className="btn ghost" onClick={() => setLimit((l) => l + 100)}>
                 Show more ({shown.length - limit})
               </button>
@@ -147,9 +170,79 @@ function GamesList() {
           </>
         )}
       </div>
+      {games.length > 0 && tab === 'insights' && (
+        <InsightsView games={games} profileId={profile.id} suggestions={suggestions.length} onChoose={() => setChoosing(true)} />
+      )}
       {importing && <ImportGamesDialog profile={profile} onClose={() => setImporting(false)} />}
       {choosing && <ChooseCardsDialog suggestions={suggestions} onClose={() => setChoosing(false)} />}
     </div>
+  );
+}
+
+/** How the analysis is doing, and what happens if you leave. */
+function AnalysisNotice({ waiting, current }: { waiting: number; current?: PlayedGame }) {
+  const queue = useAnalysisQueue();
+  const [awake, setAwake] = useState(keepAwakeWanted);
+  return (
+    <div className="notice small stack" style={{ gap: 6 }}>
+      <div className="row wrap">
+        {queue.error ? (
+          <span style={{ flex: 1 }}>{queue.error}</span>
+        ) : (
+          <span style={{ flex: 1 }}>
+            {queue.paused
+              ? `Analysis paused · ${plural(waiting, 'game')} to go.`
+              : queue.held
+                ? `Analysis waits while you play · ${plural(waiting, 'game')} to go.`
+                : current
+                  ? `Analysing ${gameLabel(current)} · ${Math.round(queue.progress * 100)}% · ${plural(waiting, 'game')} to go`
+                  : `${plural(waiting, 'game')} waiting for analysis.`}
+          </span>
+        )}
+        <button className="btn sm" onClick={() => pauseQueue(!queue.paused)}>
+          {queue.paused || queue.error ? 'Resume' : 'Pause'}
+        </button>
+      </div>
+      {!queue.paused && !queue.error && (
+        <div className="muted">
+          It runs while the app is open: you can use the rest of the app and other tabs meanwhile. If you close the app, or a phone locks
+          its screen or switches apps, it pauses and carries on the next time you open the app. Finished games are kept; at most
+          the game in progress starts again.
+        </div>
+      )}
+      {wakeLockSupported && queue.running && (
+        <label className="row" style={{ gap: 6, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={awake}
+            onChange={(e) => {
+              setAwake(e.target.checked);
+              setKeepAwake(e.target.checked);
+            }}
+          />
+          Keep the screen on until it is done
+        </label>
+      )}
+    </div>
+  );
+}
+
+/** In the top bar while games are being analysed (elsewhere than in Games): how many are left. */
+export function AnalysisPill() {
+  const queue = useAnalysisQueue();
+  const view = useApp((s) => s.view);
+  const setView = useApp((s) => s.setView);
+  const waiting = useGames((s) => s.data.games.filter(needsAnalysis).length);
+  if (view === 'games' || !waiting || !(queue.running || queue.held)) return null;
+  return (
+    <button
+      className="btn sm ghost analysis-pill"
+      onClick={() => setView('games')}
+      title={queue.held ? `Game analysis waits while you play (${waiting} to go)` : `Analysing your games: ${waiting} to go`}
+    >
+      <Icon name="games" size={14} />
+      <span className="num">{waiting}</span>
+    </button>
   );
 }
 

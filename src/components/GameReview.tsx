@@ -19,6 +19,7 @@ import { useGames } from '../lib/gamesStore';
 import { useKey } from '../lib/hooks';
 import { cardFromMoment, mistakeId } from '../lib/mistakes';
 import { useApp } from '../lib/store';
+import { positionKeys, prepCheck } from '../lib/insights';
 import { Board, moveArrow, type Shape } from './Board';
 import { EvalGraph, EvalGraphLegend } from './EvalGraph';
 import { Icon } from './Icon';
@@ -344,6 +345,8 @@ export function GameReview({ game }: { game: PlayedGame }) {
           />
         )}
 
+        <OpeningCheck game={game} />
+
         {a && mine && theirs && (
           <div className="card card-pad stack" style={{ gap: 8 }}>
             <h3>Accuracy</h3>
@@ -414,6 +417,54 @@ export function GameReview({ game }: { game: PlayedGame }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** How the game went against your repertoire (like Chess.com's course check, with your own repertoire). */
+function OpeningCheck({ game }: { game: PlayedGame }) {
+  const allReps = useApp((s) => s.data.repertoires);
+  const openLine = useApp((s) => s.openLine);
+  const reps = useMemo(() => allReps.filter((r) => r.profileId === game.profileId && r.side === game.myColor), [allReps, game.profileId, game.myColor]);
+  const check = useMemo(() => prepCheck(game.moves, positionKeys(game.moves), reps, game.myColor), [game.moves, game.myColor, reps]);
+  if (!reps.length || check.kind === 'none') return null;
+  const line = gameLine(game.moves);
+  const build = (plies: number, label: string) => (
+    <button className="btn sm ghost" onClick={() => openLine(line.slice(0, plies))}>
+      <Icon name="board" size={14} /> {label}
+    </button>
+  );
+  let text: React.ReactNode;
+  let action: React.ReactNode = null;
+  if (check.kind === 'you-left') {
+    text = (
+      <>
+        You left your repertoire with <b>{moveNo(check.ply)}{check.played}</b>; it plays {check.expected.map((m) => `${moveNo(check.ply)}${m}`).join(' or ')}.
+      </>
+    );
+    action = build(check.ply, 'Open in Build');
+  } else if (check.kind === 'opponent-left') {
+    text = (
+      <>
+        Your opponent left your preparation with <b>{moveNo(check.ply)}{check.played}</b>: you have no answer prepared to it.
+      </>
+    );
+    action = build(check.ply + 1, 'Prepare an answer');
+  } else if (check.ply >= game.moves.length) {
+    text = <>The whole game stayed in your repertoire.</>;
+  } else {
+    text = (
+      <>
+        You followed your repertoire up to {moveNo(check.ply - 1)}{game.moves[check.ply - 1]}, where it ends.
+      </>
+    );
+    action = build(check.ply, 'Extend in Build');
+  }
+  return (
+    <div className="card card-pad stack" style={{ gap: 6 }}>
+      <h3>Your repertoire</h3>
+      <div className="small">{text}</div>
+      {action && <div>{action}</div>}
     </div>
   );
 }
