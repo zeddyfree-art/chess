@@ -11,6 +11,7 @@
 // - Training progress is merged per card: whichever side reviewed a card last wins.
 // - Whole profiles and repertoires deleted on purpose stay deleted (tombstones), unless edited later.
 // - Which profile/repertoire is selected stays a per-device choice.
+import { mergeMistakes } from './mistakes';
 import { garbageCollect, type EngineFlag, type RepMove, type Repertoire, type SrsCard } from './repertoire';
 import { syncCards } from './srs';
 import type { AppData, Profile } from './store';
@@ -175,11 +176,16 @@ export function mergeData(local: AppData, remote: AppData, base?: SyncBase | nul
     (r) => alive(r) && profileIds.has(r.profileId),
   );
 
+  const mistakes = mergeMistakes(local.mistakes, remote.mistakes).filter(
+    (m) => !(deleted[m.id] !== undefined && deleted[m.id] >= m.updatedAt) && profileIds.has(m.profileId),
+  );
+
   return {
     ...local,
     version: 1,
     profiles,
     repertoires,
+    mistakes,
     deleted,
     lastBackupAt: Math.max(local.lastBackupAt ?? 0, remote.lastBackupAt ?? 0) || null,
   };
@@ -197,5 +203,5 @@ export function sameSyncedContent(a: AppData, b: AppData): boolean {
       return w !== undefined && (w === v || JSON.stringify(v) === JSON.stringify(w));
     });
   };
-  return sameItems(a.profiles, b.profiles) && sameItems(a.repertoires, b.repertoires);
+  return sameItems(a.profiles, b.profiles) && sameItems(a.repertoires, b.repertoires) && sameItems(a.mistakes ?? [], b.mistakes ?? []);
 }

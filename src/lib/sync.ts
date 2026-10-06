@@ -1,5 +1,6 @@
-// Keeps the local data and one JSON file in the user's Google Drive in step, and
-// writes a dated backup copy to Drive once a day (the last 30 are kept).
+// Keeps the local data in step with two JSON files in the user's Google Drive (the repertoire data and,
+// separately, the imported games), writes a dated backup of the repertoire data once a day (the last 30 are
+// kept) and of the games once a week (the last 8). See drive.ts for the folder layout.
 import { create } from 'zustand';
 import {
   account,
@@ -8,18 +9,23 @@ import {
   deleteFile,
   download,
   DriveAuthError,
-  ensureFolder,
+  ensureLayout,
   fileMeta,
+  findGamesFile,
   findSyncFile,
   googleClientId,
   listBackups,
+  listGameBackups,
+  moveFile,
   preloadGoogle,
   requestToken,
   revokeToken,
   updateFile,
   validToken,
   type DriveFile,
+  type Layout,
 } from './drive';
+import { mergeGames, parseGamesFile, sameGames, serializeGames, useGames } from './gamesStore';
 import { mergeData, sameSyncedContent, type SyncBase } from './merge';
 import { exportBackup, flushLocal, loadSyncBase, parseBackup, saveSyncBase, useApp, useSaveState, type AppData } from './store';
 
@@ -36,6 +42,10 @@ export const useSync = create<SyncState>()(() => ({ status: 'off', account: null
 
 const META_KEY = 'drive-sync';
 const BACKUPS_KEPT = 30;
+const GAME_BACKUPS_KEPT = 8;
+const GAME_BACKUP_DAYS = 7;
+/** Version of the folder layout in Drive (2: with Sync/ and Backups/ subfolders). */
+const LAYOUT = 2;
 
 interface Meta {
   connected: boolean;
@@ -48,6 +58,13 @@ interface Meta {
   dirty?: boolean;
   /** Last successful sync on this device. */
   lastSyncAt?: number;
+  layout?: number;
+  folders?: Layout;
+  gamesFileId?: string;
+  gamesVersion?: string;
+  /** Games changed here and not uploaded yet. */
+  gamesDirty?: boolean;
+  gamesBackupDay?: string;
 }
 
 function readMeta(): Meta {
@@ -90,6 +107,7 @@ async function rememberBase(data: AppData | SyncBase) {
 }
 
 let changeSeq = 0;
+let gamesSeq = 0;
 let applyingRemote = false;
 let running: Promise<void> | null = null;
 let queued: Promise<void> | null = null;
@@ -100,12 +118,20 @@ let timerAt = 0;
 /** Upload soon after an edit; training progress can wait for the end of the session. */
 const EDIT_DELAY = 1500;
 const TRAINING_DELAY = 30_000;
+/** Games change in bursts (an import, then the analysis of game after game): upload them in batches. */
+const GAMES_DELAY = 20_000;
 
 /** What changed between two versions of the data: nothing that syncs, only training progress, or an edit. */
 export function classify(a: AppData, b: AppData): 'none' | 'training' | 'edit' {
-  if (a.profiles === b.profiles && a.repertoires === b.repertoires && a.deleted === b.deleted) return 'none';
+  if (a.profiles === b.profiles && a.repertoires === b.repertoires && a.deleted === b.deleted && a.mistakes === b.mistakes) return 'none';
   if (a.profiles !== b.profiles || a.deleted !== b.deleted || a.repertoires.length !== b.repertoires.length) return 'edit';
   let training = false;
+  if (a.mistakes !== b.mistakes) {
+    const x = a.mistakes ?? [];
+    const y = b.mistakes ?? [];
+    if (x.length !== y.length || x.some((m, i) => m.id !== y[i].id || m.updatedAt !== y[i].updatedAt)) return 'edit';
+    training = true; // only the review schedule of mistake cards changed
+  }
   for (let i = 0; i < a.repertoires.length; i++) {
     const x = a.repertoires[i];
     const y = b.repertoires[i];
@@ -135,7 +161,7 @@ function idleStatus(): SyncStatus {
   if (!googleClientId()) return 'unconfigured';
   if (!meta.connected) return 'off';
   if (!validToken()) return 'needs-auth';
-  return meta.dirty ? 'pending' : 'synced';
+  return meta.dirty || meta.gamesDirty ? 'pending' : 'synced';
 }
 
 /** Call once after local data is loaded. */
@@ -161,11 +187,23 @@ export function initSync() {
     schedule(kind === 'edit' ? EDIT_DELAY : TRAINING_DELAY);
   });
 
+  let lastGames = useGames.getState().data;
+  useGames.subscribe((s) => {
+    if (s.data === lastGames) return;
+    lastGames = s.data;
+    if (applyingRemote || !s.loaded) return;
+    gamesSeq++;
+    if (!readMeta().connected) return;
+    writeMeta({ gamesDirty: true });
+    if (useSync.getState().status !== 'syncing') setStatus({ status: validToken() ? 'pending' : 'needs-auth' });
+    schedule(GAMES_DELAY);
+  });
+
   document.addEventListener('visibilitychange', () => {
     // Coming back: pick up changes made on another device.
     if (document.visibilityState === 'visible') schedule(300);
     // Leaving (switching app or tab): push anything still waiting while the page is alive.
-    else if (readMeta().connected && readMeta().dirty && validToken()) void flushLocal().then(syncNow);
+    else if (readMeta().connected && (readMeta().dirty || readMeta().gamesDirty) && validToken()) void flushLocal().then(syncNow);
   });
   setInterval(() => document.visibilityState === 'visible' && schedule(0), 5 * 60_000);
   if (meta.connected && validToken()) schedule(0);
@@ -267,19 +305,21 @@ async function run() {
 
   setStatus({ status: 'syncing', error: null });
   const seqAtStart = changeSeq;
+  const gamesSeqAtStart = gamesSeq;
   try {
     const known = await getBase();
-    let folderId = meta.folderId ?? (await ensureFolder());
+    let folders = meta.layout === LAYOUT && meta.folders ? meta.folders : await ensureLayout();
     let file: DriveFile | null = meta.fileId ? await fileMeta(meta.fileId) : null;
     file ??= await findSyncFile();
 
     let version: string | undefined;
     let onDrive: AppData | SyncBase;
     if (!file) {
-      // First sync, or the file/folder was removed from Drive: (re)create them.
-      folderId = await ensureFolder();
+      // First sync, or the file was removed from Drive: (re)create it (and any folder that went with it).
+      folders = await ensureLayout();
+      writeMeta({ folders });
       const snapshot = useApp.getState().data;
-      const created = await createFile('repertoire-sync.json', 'sync', folderId, serialize(snapshot));
+      const created = await createFile('repertoire-sync.json', 'sync', folders.sync, serialize(snapshot));
       file = created;
       version = created.version;
       onDrive = snapshot;
@@ -308,11 +348,20 @@ async function run() {
 
     await rememberBase(onDrive);
     const stillDirty = changeSeq !== seqAtStart;
+    writeMeta({ folderId: folders.root, fileId: file.id, version, dirty: stillDirty });
+
+    const games = await syncGames(folders, gamesSeqAtStart);
+    if (meta.layout !== LAYOUT) {
+      await moveIntoLayout(folders);
+      writeMeta({ layout: LAYOUT, folders });
+    }
     const now = Date.now();
-    writeMeta({ folderId, fileId: file.id, version, dirty: stillDirty, lastSyncAt: now });
-    await dailyBackup(folderId);
-    setStatus({ status: stillDirty ? 'pending' : 'synced', lastSyncAt: now, error: null });
-    if (stillDirty) again = true;
+    writeMeta({ lastSyncAt: now });
+    await dailyBackup();
+    await weeklyGamesBackup();
+    const pending = stillDirty || games.stillDirty;
+    setStatus({ status: pending ? 'pending' : 'synced', lastSyncAt: now, error: null });
+    if (pending) again = true;
   } catch (e) {
     if (e instanceof DriveAuthError) {
       clearToken();
@@ -327,9 +376,81 @@ function serialize(data: AppData): string {
   return exportBackup(data);
 }
 
-async function dailyBackup(folderId: string) {
+/** The games file: merged like the repertoire file, but on its own, so a big collection of games does not
+ *  slow down syncing your repertoire and training. */
+async function syncGames(folders: Layout, seqAtStart: number): Promise<{ stillDirty: boolean }> {
+  const meta = readMeta();
+  if (!useGames.getState().loaded) return { stillDirty: !!meta.gamesDirty };
+  let file: DriveFile | null = meta.gamesFileId ? await fileMeta(meta.gamesFileId) : null;
+  file ??= await findGamesFile();
+  let version: string | undefined;
+  const local = useGames.getState().data;
+  if (!file) {
+    if (!local.games.length && !Object.keys(local.deleted).length) return { stillDirty: false }; // nothing to keep yet
+    file = await createFile('games-sync.json', 'games-sync', folders.sync, serializeGames(local));
+    version = file.version;
+  } else if (file.version !== meta.gamesVersion) {
+    const remote = parseGamesFile(await download(file.id));
+    const merged = mergeGames(useGames.getState().data, remote);
+    applyingRemote = true;
+    try {
+      useGames.getState().applyRemote(merged);
+    } finally {
+      applyingRemote = false;
+    }
+    version = file.version;
+    if (!sameGames(merged, remote)) version = (await updateFile(file.id, serializeGames(merged))).version;
+  } else if (meta.gamesDirty) {
+    version = (await updateFile(file.id, serializeGames(local))).version;
+  } else {
+    version = file.version;
+  }
+  const stillDirty = gamesSeq !== seqAtStart;
+  writeMeta({ gamesFileId: file.id, gamesVersion: version, gamesDirty: stillDirty });
+  return { stillDirty };
+}
+
+/** Puts files made before the subfolders existed in their place (once per device; quick when done). */
+async function moveIntoLayout(folders: Layout) {
+  // A move changes a file's version. If nobody changed the file since this device synced it, take the new
+  // version as known, so the move does not look like a change made on another device.
+  const move = async (file: DriveFile | null, folder: string, known: 'version' | 'gamesVersion') => {
+    if (!file) return;
+    const before = readMeta()[known];
+    const moved = await moveFile(file, folder);
+    if (moved?.version && before === file.version) writeMeta({ [known]: moved.version });
+  };
+  const meta = readMeta();
+  await move(meta.fileId ? await fileMeta(meta.fileId) : await findSyncFile(), folders.sync, 'version');
+  await move(meta.gamesFileId ? await fileMeta(meta.gamesFileId) : await findGamesFile(), folders.sync, 'gamesVersion');
+  for (const b of await listBackups()) await moveFile(b, folders.repertoireBackups).catch(() => {});
+  for (const b of await listGameBackups()) await moveFile(b, folders.gameBackups).catch(() => {});
+}
+
+/** The folders, checked again (and recreated if someone removed them): done before writing a backup. */
+async function checkedLayout(): Promise<Layout> {
+  const folders = await ensureLayout();
+  writeMeta({ folders });
+  return folders;
+}
+
+async function weeklyGamesBackup() {
+  const meta = readMeta();
+  const today = new Date().toISOString().slice(0, 10);
+  if (meta.gamesBackupDay && Date.parse(today) - Date.parse(meta.gamesBackupDay) < GAME_BACKUP_DAYS * 86_400_000) return;
+  const data = useGames.getState().data;
+  if (!data.games.length) return;
+  const folders = await checkedLayout();
+  await createFile(`games-backup-${today}.json`, 'games-backup', folders.gameBackups, serializeGames(data));
+  const all = await listGameBackups();
+  for (const old of all.slice(GAME_BACKUPS_KEPT)) await deleteFile(old.id).catch(() => {});
+  writeMeta({ gamesBackupDay: today });
+}
+
+async function dailyBackup() {
   const day = new Date().toISOString().slice(0, 10);
   if (readMeta().backupDay === day) return;
+  const folderId = (await checkedLayout()).repertoireBackups;
   const name = `repertoire-backup-${day}.json`;
   const backups = await listBackups();
   const today = backups.find((b) => b.name === name);

@@ -4,7 +4,8 @@ A web app in the spirit of Chessbook, but with **no move limit**, **several play
 across devices** through your own Google Drive, and a **human-like practice opponent**. Build opening
 repertoires, see all branches at a glance, prune what you don't need, check your moves with an engine and
 against what people at your level actually play (Lichess database), train with spaced repetition (FSRS),
-and play practice games from any position.
+and play practice games from any position. Bring in the **games you played** (Lichess or PGN): they are analysed on
+your device, and the mistakes you choose become cards in your own deck of mistakes.
 
 Live: <https://zeddyfree-art.github.io/chess/> · [About](https://zeddyfree-art.github.io/chess/#about) · [Privacy Policy](https://zeddyfree-art.github.io/chess/privacy.html) · [Terms of Service](https://zeddyfree-art.github.io/chess/terms.html)
 
@@ -26,10 +27,11 @@ Live: <https://zeddyfree-art.github.io/chess/> · [About](https://zeddyfree-art.
 | **Overview** | The active player's repertoires with their size and what is due today. Sizes are counted like books and PGN do: one **move** is White's move plus Black's reply (1.e4 e5 is one move); hover a number for the half-moves, your own moves and line lengths. Each card has **Download** (PGN), **Add lines from a PGN** (paste or file) and **Delete** (with confirmation and an Undo). |
 | **Build** | Board plus the current line. Moves you play are a *proposal* (dashed blue) until you **Save** (Enter) or **Discard** (Esc). Next to it: your prepared moves in this position (○ White / ● Black, with number of follow-up moves, comments, ★ main move, delete), a note per position, and tabs **Lichess games**, **Masters** and **Engine**. **Train from here** and **Play from here** start from the position on the board. Imported comments and arrows/circles show here; you can draw your own (see below). |
 | **Tree** | The whole repertoire as a diagram. Green = your move, outlined = opponent move with how often it is played; line thickness = popularity; red dashed nodes = **gaps** (played often, not prepared). Collapse/expand per branch or to a depth, highlight due / dubious / rare moves. Select a node to open it, train or play from it, or **Prune branch** (Delete) — you see beforehand how many moves and cards disappear, and everything can be undone (Ctrl+Z). |
-| **Train** | FSRS spaced repetition: each move you play is a card. New moves are shown first and quizzed again later in the session. **Practice lines** plays random lines through without affecting the schedule. Scoped to one branch when started with *Train from here* (review, drill the whole branch, or practice lines). From any card, **Open in Build** shows that position on the build board and **Analyse on Lichess** opens it on the Lichess analysis board. |
+| **Train** | Two decks: your repertoire and **My mistakes** (positions from your own games, see below). FSRS spaced repetition: each move you play is a card. New moves are shown first and quizzed again later in the session. **Practice lines** plays random lines through without affecting the schedule. Scoped to one branch when started with *Train from here* (review, drill the whole branch, or practice lines). From any card, **Open in Build** shows that position on the build board and **Analyse on Lichess** opens it on the Lichess analysis board. |
 | **Play** | Practice games against **Maia-3**, a human-like neural network, at any strength from 600 to 2600. In the opening it plays what people at that level actually play (Lichess database) or sticks to your prepared lines; afterwards it plays like a human of that rating. Tells you when you (or it) leave your repertoire; take back, copy PGN, analyse on Lichess, or open the game in Build to add moves. |
+| **Games** | The games you played, fetched from Lichess (period: last week, month, year or all; choose the time controls) or added from a PGN file (Chess.com, over the board). Each game is analysed on your device: an evaluation graph with the opening, middlegame and endgame, accuracy per phase, your blunders, mistakes and misses, and per mistake what was better, why, and how many players at your level would have found it. **Find a better move** lets you try again; **Train this** makes it a card; **Play from here vs Maia** plays any position of the game, or the better move, against the human-like opponent. |
 | **Check** | **Find gaps**: walks your repertoire against the Lichess database (the player's rating groups and time controls) and sorts missing replies by how often you'll meet them, with a coverage percentage. **Engine check**: rates each of your moves (?!, ?, ??) with the Lichess cloud evaluation or local Stockfish 19. |
-| **Settings** | Players (name, own rating, colour, rating groups, time controls), Google Drive sync and backups, Lichess connection, PGN export/import per repertoire, backup file download/restore. |
+| **Settings** | Players (name, own rating, colour, rating groups, time controls, Lichess username, the names you use in PGN files), Google Drive sync and backups, Lichess connection, PGN export/import per repertoire, backup file download/restore. |
 
 Transpositions are recognised: the repertoire is a graph of *positions*, so 1.d4 Nf6 2.c4 e6 and 1.c4 e6 2.d4 Nf6
 share their continuation.
@@ -46,9 +48,25 @@ Everything is stored in the browser (IndexedDB) — no account, no server. Optio
 (Settings → Sync & automatic backup) on each device you use:
 
 - all devices share the same players, repertoires and training progress;
-- a dated backup is written to the `Repertoire app` folder in your Drive once a day (last 30 kept), and can be
-  restored from Settings;
+- a dated backup of your players, repertoires and training is written once a day (last 30 kept) and can be restored
+  from Settings; your games are backed up once a week (last 8);
 - the app uses the `drive.file` permission: it can only see the files it created itself.
+
+Everything goes into one folder in your Drive:
+
+```
+Repertoire app/
+  Sync/                     the live copies every device syncs with
+    repertoire-sync.json      players, repertoires, training (including your mistake cards)
+    games-sync.json           your imported games and their analysis
+  Backups/
+    Repertoire/             repertoire-backup-<date>.json, one a day, the last 30
+    Games/                  games-backup-<date>.json, one a week, the last 8
+```
+
+Games have their own file so a large collection never slows down syncing your repertoire. The app finds its files by a
+tag it puts on them, not by name or place, so renaming them does no harm. Drives set up before October 2026 (one flat
+folder) are tidied into this layout by the first sync.
 
 **Google gives browser apps one-hour sessions**, and a new one needs a tap (a website without its own server cannot
 renew it silently). So when you open the app after a while, typically on a phone, it cannot fetch your latest data by
@@ -107,6 +125,40 @@ seven mandatory tags.
 be represented in a repertoire of real games; the app tells you how many lines were cut at a pass. Clocks (`[%clk]`), engine evaluations
 (`[%eval]`), Chessable's internal `[%mdl …]` codes and chess variants such as Chess960 or Atomic are ignored.
 
+## Your games: analysis and mistake cards
+
+**Getting them in.** *Games → Add games*. From Lichess you enter your username (public games need no login) and choose a
+period and time controls; games Lichess has already analysed come with its evaluations, so they are ready sooner. A PGN file
+works for any site: the app asks which player is you (it guesses the name that appears in most games) and remembers that name.
+
+**The analysis** runs on your device, one game at a time in the background, while the app is open: about half a minute per
+game on a laptop, a minute or more on a phone. It pauses while you play a practice game.
+
+1. Every position gets a quick Stockfish 19 evaluation (depth 14).
+2. Your worst moves are looked at again, deeper (depth 18) and with the three best moves, so the verdict and the list of
+   good alternatives are reliable.
+3. For each mistake the engine is also asked what the opponent would play if it were their turn (a "null move"): when that
+   is exactly what punished your move, you overlooked a **threat**, and the app says so ("Your opponent was threatening 32…Qxc4").
+4. If Maia is downloaded (it is the Play opponent), it estimates how many players at your rating would have found a good
+   move there. Mistakes most of them find are worth drilling; moves only an engine finds are shown, but not suggested as cards.
+
+**The measures follow Lichess**, whose formulas are public: winning chances from the evaluation, a move's accuracy from the
+winning chances it lost, a game's accuracy weighted towards sharp positions, and inaccuracy / mistake / blunder for a loss of
+5, 10 or 15 percentage points of winning chances. Chess.com's **Miss** is added (a mistake right after your opponent's
+mistake, so the chance was there and went by), and so are smaller slips that let a clearly won position go. The phases are
+Lichess' too: the middlegame starts when at most ten pieces (not counting kings and pawns) are left or a back rank has
+thinned out, the endgame at six.
+
+**Mistake cards.** After the analysis the Games tab says how many mistakes could become cards; *Choose cards* lists them,
+with the learnable ones ticked. A card is the position from your game: "You played 23.e4 here. Find a better move." Any move
+the engine rates as good counts. Cards are scheduled with FSRS like your repertoire, synced with it, and after each card you
+can play the position out against Maia. One position is one card, however many games it came up in.
+
+**Limits worth knowing.** A position from the middlegame rarely comes back move for move, so a card helps through its
+pattern ("the knight left the f-file, now take on f7"); read the explanation after each card. Accuracy is a noisy number for
+one game; look at it over many. The evaluation in your browser is not as deep as Lichess' server analysis, so borderline
+verdicts can differ by a category.
+
 ## The Lichess database
 
 The app uses the Lichess **Opening Explorer** API (`https://explorer.lichess.org/lichess?fen=…&ratings=1600,1800&speeds=blitz,rapid`).
@@ -148,7 +200,8 @@ Requires [Node.js](https://nodejs.org) 22+.
 npm install          # also copies Stockfish to public/
 npm run fetch-maia   # optional: serve the Maia model locally (otherwise it is fetched from GitHub)
 npm run dev          # open http://localhost:5173
-npm test             # unit tests (repertoire graph, PGN, SRS, sync merge, Maia encoding)
+npm test             # unit tests (repertoire graph, PGN, SRS, sync merge, Maia encoding, game analysis)
+STOCKFISH=1 npx vitest run src/lib/analyzer.engine.test.ts   # the game analysis with real Stockfish (slow)
 npm run build        # production build in dist/
 ```
 
@@ -172,10 +225,16 @@ src/lib/engine.ts       Stockfish worker (UCI, MultiPV); evaluate.ts: cloud firs
 src/lib/audit.ts        gap/coverage analysis and engine check
 src/lib/maia*.ts        Maia-3: board/move encoding, ONNX worker, download + cache
 src/lib/opponent.ts     practice opponent: your lines → Lichess database → Maia
-src/lib/drive.ts        Google Identity Services + Drive REST (drive.file)
-src/lib/sync.ts         sync loop, daily backups; merge.ts: merging two devices' data
+src/lib/games.ts        played games: model, PGN reading (which side is you), ids against duplicates
+src/lib/lichessGames.ts your games from the Lichess export API (streamed), with Lichess' own evaluations
+src/lib/analysis.ts     winning chances, accuracy, phases, verdicts, moments, explanations (pure, tested)
+src/lib/analyzer.ts     the analysis with Stockfish (two passes, null-move threats, Maia) and its background queue
+src/lib/gamesStore.ts   games in IndexedDB, merging games of two devices
+src/lib/mistakes.ts     mistake cards: from a moment, merging, training queue
+src/lib/drive.ts        Google Identity Services + Drive REST (drive.file), folder layout
+src/lib/sync.ts         sync loop (repertoire file and games file), backups; merge.ts: merging two devices' data
 src/lib/store.ts        app state (zustand), undo/redo, IndexedDB persistence
-src/components/         React screens: Build, Tree, Train, Play, Check, Overview, Settings
+src/components/         React screens: Build, Tree, Train, Play, Check, Games, Overview, Settings
 ```
 
 ## Privacy

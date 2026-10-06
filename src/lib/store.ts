@@ -5,7 +5,9 @@ import { create } from 'zustand';
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { playSan, type PlayedMove, type Side } from './chess';
 import { findMove, findPath, newRepertoire, onlyCardsChanged, ROOT, type Repertoire } from './repertoire';
-import { syncCards } from './srs';
+import { addCards, type MistakeCard } from './mistakes';
+import { gradeCard, syncCards } from './srs';
+import type { Grade } from 'ts-fsrs';
 
 export interface Profile {
   id: string;
@@ -16,6 +18,10 @@ export interface Profile {
   speeds: string[];
   /** The player's own approximate rating (used for the human-like opponent). */
   rating?: number;
+  /** Lichess username, to fetch the player's own games. */
+  lichess?: string;
+  /** Names the player uses in PGN files of their games (other sites, over-the-board), to tell their colour. */
+  aliases?: string[];
   updatedAt?: number;
 }
 
@@ -27,11 +33,13 @@ export interface AppData {
   activeProfileId: string | null;
   activeRepId: string | null;
   lastBackupAt: number | null;
-  /** Deletion tombstones (profile or repertoire id → time), so deletions survive syncing. */
+  /** Deletion tombstones (profile, repertoire or mistake card id → time), so deletions survive syncing. */
   deleted?: Record<string, number>;
+  /** Training cards made from mistakes in your own games (all players). Absent in older data. */
+  mistakes?: MistakeCard[];
 }
 
-export type View = 'home' | 'build' | 'tree' | 'train' | 'play' | 'audit' | 'settings' | 'about';
+export type View = 'home' | 'build' | 'tree' | 'train' | 'play' | 'audit' | 'games' | 'settings' | 'about';
 
 export interface Toast {
   id: number;
@@ -59,6 +67,12 @@ export interface AppState {
   trainScope: string | null;
   /** Moves leading to the position a practice game starts from. */
   playStart: PlayedMove[];
+  /** The colour to play from there and where the position comes from (from a game review). */
+  playSetup: { color?: Side; label?: string; level?: number } | null;
+  /** The game open in the Games tab (null: the list). */
+  openGameId: string | null;
+  /** Which deck the Train tab shows. */
+  trainDeck: 'repertoire' | 'mistakes';
   undo: UndoEntry[];
   redo: UndoEntry[];
   toast: Toast | null;
@@ -90,7 +104,13 @@ export interface AppState {
   goToKey(key: string): void;
   goToSans(sans: string[]): void;
   trainFrom(key: string | null): void;
-  playFrom(line: PlayedMove[]): void;
+  playFrom(line: PlayedMove[], setup?: { color?: Side; label?: string; level?: number }): void;
+  openGame(id: string | null): void;
+  setTrainDeck(deck: 'repertoire' | 'mistakes'): void;
+  addMistakes(cards: MistakeCard[]): number;
+  deleteMistakes(ids: string[]): void;
+  restoreMistakes(cards: MistakeCard[]): void;
+  gradeMistake(id: string, grade: Grade): number;
   showToast(message: string, action?: Toast['action']): void;
   hideToast(): void;
 }
@@ -141,6 +161,9 @@ export const useApp = create<AppState>()((set, get) => {
     ply: 0,
     trainScope: null,
     playStart: [],
+    playSetup: null,
+    openGameId: null,
+    trainDeck: 'repertoire',
     undo: [],
     redo: [],
     toast: null,
@@ -176,6 +199,7 @@ export const useApp = create<AppState>()((set, get) => {
           ...data,
           profiles: data.profiles.filter((p) => p.id !== id),
           repertoires: data.repertoires.filter((r) => r.profileId !== id),
+          mistakes: (data.mistakes ?? []).filter((m) => m.profileId !== id),
           deleted: tombstone([id, ...gone]),
         }),
       });
@@ -259,8 +283,10 @@ export const useApp = create<AppState>()((set, get) => {
       // edited now, and whatever it does not contain counts as deleted.
       const now = Date.now();
       const current = get().data;
-      const keep = new Set([...incoming.profiles.map((p) => p.id), ...incoming.repertoires.map((r) => r.id)]);
-      const removed = [...current.profiles.map((p) => p.id), ...current.repertoires.map((r) => r.id)].filter((id) => !keep.has(id));
+      const keep = new Set([...incoming.profiles.map((p) => p.id), ...incoming.repertoires.map((r) => r.id), ...(incoming.mistakes ?? []).map((m) => m.id)]);
+      const removed = [...current.profiles.map((p) => p.id), ...current.repertoires.map((r) => r.id), ...(current.mistakes ?? []).map((m) => m.id)].filter(
+        (id) => !keep.has(id),
+      );
       const deleted = { ...(incoming.deleted ?? {}), ...Object.fromEntries(removed.map((id) => [id, now])) };
       for (const id of keep) delete deleted[id];
       const data: AppData = fixSelection({
@@ -268,6 +294,7 @@ export const useApp = create<AppState>()((set, get) => {
         ...incoming,
         profiles: incoming.profiles.map((p) => ({ ...p, updatedAt: now })),
         repertoires: incoming.repertoires.map((r) => ({ ...r, updatedAt: now })),
+        mistakes: (incoming.mistakes ?? []).map((m) => ({ ...m, updatedAt: now })),
         deleted,
       });
       set({ data, undo: [], redo: [], line: [], ply: 0, view: 'home', trainScope: null });
@@ -316,7 +343,48 @@ export const useApp = create<AppState>()((set, get) => {
 
     trainFrom: (key) => set({ trainScope: key && key !== ROOT ? key : null, view: 'train' }),
 
-    playFrom: (line) => set({ playStart: line, view: 'play' }),
+    playFrom: (line, setup) => set({ playStart: line, playSetup: setup ?? null, view: 'play' }),
+
+    openGame: (id) => set({ openGameId: id, view: 'games' }),
+
+    setTrainDeck: (deck) => set({ trainDeck: deck }),
+
+    addMistakes: (cards) => {
+      const { data } = get();
+      const { cards: mistakes, added } = addCards(data.mistakes ?? [], cards);
+      const deleted = { ...(data.deleted ?? {}) };
+      for (const c of cards) delete deleted[c.id]; // added again on purpose
+      patchData({ mistakes, deleted });
+      return added;
+    },
+
+    deleteMistakes: (ids) => {
+      const { data } = get();
+      const gone = new Set(ids);
+      patchData({ mistakes: (data.mistakes ?? []).filter((m) => !gone.has(m.id)), deleted: tombstone(ids) });
+    },
+
+    restoreMistakes: (cards) => {
+      const { data } = get();
+      const deleted = { ...(data.deleted ?? {}) };
+      for (const c of cards) delete deleted[c.id];
+      const now = Date.now();
+      const have = new Set((data.mistakes ?? []).map((m) => m.id));
+      const back = cards.filter((c) => !have.has(c.id)).map((c) => ({ ...c, updatedAt: now + 1 }));
+      patchData({ mistakes: [...(data.mistakes ?? []), ...back], deleted });
+    },
+
+    gradeMistake: (id, grade) => {
+      let due = 0;
+      const mistakes = (get().data.mistakes ?? []).map((m) => {
+        if (m.id !== id) return m;
+        const card = gradeCard(m.card, grade);
+        due = card.due;
+        return { ...m, card };
+      });
+      patchData({ mistakes });
+      return due;
+    },
 
     showToast: (message, action) => {
       const id = ++toastSeq;

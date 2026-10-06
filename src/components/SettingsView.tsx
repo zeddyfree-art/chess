@@ -515,6 +515,30 @@ function ProfileEditor({
           }}
         />
       </div>
+      <div className="row wrap" style={{ gap: 16, alignItems: 'flex-start' }}>
+        <div className="field">
+          <label className="small">Lichess username (to fetch your games)</label>
+          <input
+            className="input"
+            style={{ width: 200 }}
+            defaultValue={profile.lichess ?? ''}
+            placeholder="optional"
+            onBlur={(e) => e.target.value.trim() !== (profile.lichess ?? '') && onChange({ lichess: e.target.value.trim() || undefined })}
+          />
+        </div>
+        <div className="field" style={{ flex: 1, minWidth: 220 }}>
+          <label className="small">Your names in PGN files of your games (other sites, clubs), comma-separated</label>
+          <input
+            className="input"
+            defaultValue={(profile.aliases ?? []).join(', ')}
+            placeholder="optional"
+            onBlur={(e) => {
+              const aliases = e.target.value.split(',').map((x) => x.trim()).filter(Boolean);
+              if (aliases.join(',') !== (profile.aliases ?? []).join(',')) onChange({ aliases: aliases.length ? aliases : undefined });
+            }}
+          />
+        </div>
+      </div>
       <div className="field">
         <label className="small">Opponents' rating groups in the database (average rating of both players)</label>
         <div className="filter-row">

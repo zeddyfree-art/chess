@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { completeLoginIfRedirected } from './lib/lichess';
+import { loadGames } from './lib/gamesStore';
 import { loadData, useApp } from './lib/store';
 import { initSync } from './lib/sync';
 import './styles.css';
@@ -21,7 +22,7 @@ addEventListener('unhandledrejection', (e) => {
   if (msg) useApp.getState().showToast(`Error: ${msg}`);
 });
 
-loadData().then(() => {
+Promise.all([loadData(), loadGames()]).then(() => {
   initSync();
   completeLoginIfRedirected()
     .then((user) => user && useApp.getState().showToast(`Connected to Lichess as ${user}`))

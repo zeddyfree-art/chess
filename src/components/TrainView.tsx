@@ -7,12 +7,20 @@ import { saveNow, type SaveResult } from '../lib/sync';
 import { tokensToShapes } from '../lib/shapes';
 import { Board, moveArrow, sideCircle, type Shape } from './Board';
 import { Icon } from './Icon';
+import { DeckTabs, MistakesTrain } from './MistakesTrain';
 import { SavedNote, saveMessage } from './SaveIndicator';
 
 type Mode = 'review' | 'lines';
 
+/** Two decks: the moves of the selected repertoire, and the mistakes from your own games. */
 export function TrainView() {
-  const rep = useApp(activeRep)!;
+  const rep = useApp(activeRep);
+  const deck = useApp((s) => s.trainDeck);
+  if (!rep || deck === 'mistakes') return <MistakesTrain />;
+  return <RepertoireTrain rep={rep} />;
+}
+
+function RepertoireTrain({ rep }: { rep: Repertoire }) {
   const scope = useApp((s) => s.trainScope);
   const trainFrom = useApp((s) => s.trainFrom);
   const [mode, setMode] = useState<Mode | null>(null);
@@ -70,6 +78,7 @@ export function TrainView() {
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto' }} className="stack">
+      <DeckTabs />
       <div className="card card-pad stack">
         <div className="row wrap">
           <h2>Train: {rep.name}</h2>
@@ -153,7 +162,7 @@ interface QItem extends TrainItem {
   kind: 'learn' | 'review' | 'test' | 'retry';
 }
 
-function useFlash() {
+export function useFlash() {
   const [flash, setFlash] = useState<'' | 'flash-good' | 'flash-bad'>('');
   const t = useRef<ReturnType<typeof setTimeout>>(undefined);
   const trigger = (f: 'flash-good' | 'flash-bad') => {
@@ -412,13 +421,13 @@ function ReviewSession({ rep, initial, onExit }: { rep: Repertoire; initial: QIt
 
 /** The position on the board, elsewhere: on the build board (this ends the session; progress so far is saved)
  *  or on the Lichess analysis board in a new tab (the session goes on). */
-function PositionLinks({ line, positionKey, orientation }: { line: PlayedMove[]; positionKey: string; orientation: Side }) {
+export function PositionLinks({ line, positionKey, orientation, build = true }: { line: PlayedMove[]; positionKey: string; orientation: Side; build?: boolean }) {
   const openLine = useApp((s) => s.openLine);
   return (
     <div className="row wrap" style={{ gap: 6 }}>
-      <button className="btn sm ghost" onClick={() => openLine(line)} title="Open this position on the build board (ends the session; your progress is saved)">
+      {build && <button className="btn sm ghost" onClick={() => openLine(line)} title="Open this position on the build board (ends the session; your progress is saved)">
         <Icon name="board" size={14} /> Open in Build
-      </button>
+      </button>}
       <a
         className="btn sm ghost"
         href={lichessAnalysisUrl(positionKey, orientation, line.length)}

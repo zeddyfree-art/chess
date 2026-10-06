@@ -44,11 +44,14 @@ function PlaySetup({ onStart }: { onStart: (g: GameConfig) => void }) {
   const rep = useApp(activeRep);
   const profile = useApp(activeProfile)!;
   const start = useApp((s) => s.playStart);
+  const setup = useApp((s) => s.playSetup);
   const playFrom = useApp((s) => s.playFrom);
   const maia = useMaia();
   const prefs = readPrefs();
-  const [level, setLevel] = useState(prefs.level ?? Math.min(MAIA_MAX, Math.max(MAIA_MIN, profileRating(profile))));
-  const [color, setColor] = useState<Side>(rep?.side ?? 'white');
+  const clampLevel = (r: number) => Math.min(MAIA_MAX, Math.max(MAIA_MIN, Math.round(r / 100) * 100));
+  // From a game review: the opponent's rating in that game.
+  const [level, setLevel] = useState(setup?.level ? clampLevel(setup.level) : (prefs.level ?? clampLevel(profileRating(profile))));
+  const [color, setColor] = useState<Side>(setup?.color ?? rep?.side ?? 'white');
   const [mode, setMode] = useState<OpponentSettings['mode']>(prefs.mode ?? 'realistic');
   const [coach, setCoach] = useState(prefs.coach ?? true);
   const [downloaded, setDownloaded] = useState<boolean | null>(null);
@@ -58,7 +61,9 @@ function PlaySetup({ onStart }: { onStart: (g: GameConfig) => void }) {
     isMaiaDownloaded().then(setDownloaded);
   }, []);
   useEffect(() => {
-    localStorage.setItem('play-prefs', JSON.stringify({ level, mode, coach }));
+    // A level taken over from a game is not remembered as your usual choice.
+    localStorage.setItem('play-prefs', JSON.stringify({ level: setup?.level ? (prefs.level ?? level) : level, mode, coach }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level, mode, coach]);
 
   const go = async () => {
@@ -91,7 +96,17 @@ function PlaySetup({ onStart }: { onStart: (g: GameConfig) => void }) {
         <div className="field">
           <label>Start from</label>
           <div className="row wrap">
-            <span>{start.length ? formatLine(start.map((m) => m.san)) : 'the starting position'}</span>
+            <span>
+              {setup?.label ? (
+                <>
+                  {setup.label} <span className="muted small">({start.length ? `move ${Math.floor(start.length / 2) + 1}, ${turnOfKey(start.at(-1)!.to)} to move` : 'start'})</span>
+                </>
+              ) : start.length ? (
+                formatLine(start.map((m) => m.san))
+              ) : (
+                'the starting position'
+              )}
+            </span>
             {start.length > 0 && (
               <button className="btn sm ghost" onClick={() => playFrom([])}>
                 <Icon name="x" size={14} /> from move 1

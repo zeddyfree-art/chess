@@ -1651,3 +1651,429 @@ a.btn {
     margin-bottom: 8px;
   }
 }
+
+/* ---------- Games ---------- */
+
+.game-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.game-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.game-row:last-child {
+  border-bottom: 0;
+}
+
+.game-row:hover {
+  background: var(--surface-2);
+}
+
+.game-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.game-main > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-stats {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.badge.result {
+  width: 26px;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.sym {
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.sym.bad {
+  color: #d03b3b;
+}
+
+.sym.mistake {
+  color: #c06a00;
+}
+
+.sym.inaccuracy {
+  color: #4f7fb8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sym.bad {
+    color: #f0726a;
+  }
+  .sym.mistake {
+    color: #f0a640;
+  }
+  .sym.inaccuracy {
+    color: #82aee6;
+  }
+}
+
+.badge.kind-blunder,
+.badge.kind-miss {
+  background: var(--gap-soft);
+  color: var(--gap);
+}
+
+.badge.kind-mistake {
+  background: var(--due-soft);
+  color: var(--due);
+}
+
+.badge.kind-inaccuracy {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.suggest-banner {
+  align-items: center;
+}
+
+.choose-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 50vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.choose-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.choose-row input {
+  margin-top: 3px;
+}
+
+/* Review of one game: board with the graph under it, panels on the right. The board is a little smaller than
+   elsewhere so the graph fits under it on a laptop screen. */
+.review {
+  --board: min(calc(100vh - 330px), calc(100vw - 560px), 640px);
+  display: grid;
+  grid-template-columns: auto minmax(320px, 460px);
+  grid-template-rows: auto 1fr;
+  gap: 16px 24px;
+  align-items: start;
+  justify-content: center;
+}
+
+.review-head {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.review-board {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.review-side {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.review-board {
+  width: var(--board);
+  gap: 8px;
+}
+
+.review-nav {
+  gap: 6px;
+}
+
+.review-ply {
+  min-width: 70px;
+  text-align: center;
+}
+
+.review-title {
+  font-size: 16px;
+}
+
+.moment-move {
+  font-size: 16px;
+}
+
+.key-white {
+  font-weight: 600;
+}
+
+.key-engine {
+  color: #7a3db8;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .key-engine {
+    color: #b88ae6;
+  }
+}
+
+.acc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.acc-table th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 2px 6px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-table th:first-child,
+.acc-table td:first-child {
+  text-align: left;
+}
+
+.acc-table td {
+  text-align: right;
+  padding: 3px 6px;
+  border-top: 1px solid var(--border);
+}
+
+.review-moves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  line-height: 1.9;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.review-moves .rm {
+  padding: 0 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.review-moves .rm .faint {
+  margin-right: 3px;
+}
+
+.review-moves .rm:hover {
+  background: var(--surface-2);
+}
+
+.review-moves .rm.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.review-moves .rm.moment {
+  text-decoration: underline;
+  text-decoration-color: var(--gap);
+  text-underline-offset: 3px;
+}
+
+.eval-graph {
+  position: relative;
+  width: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--border);
+  touch-action: pan-y;
+}
+
+.eval-graph svg {
+  display: block;
+}
+
+.eg-black {
+  fill: var(--black-bar);
+}
+
+.eg-white {
+  fill: var(--white-bar);
+}
+
+.eg-line {
+  fill: none;
+  stroke: #8c8c8c;
+  stroke-width: 1.5;
+}
+
+.eg-mid {
+  stroke: #8c8c8c;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.eg-phase {
+  stroke: #9a9a9a;
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.eg-phase-label {
+  fill: #d6d6d6;
+  font-size: 10px;
+}
+
+.eg-cursor {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.eg-hover {
+  stroke: #9a9a9a;
+  stroke-width: 1;
+}
+
+.eg-bad {
+  fill: #d03b3b;
+  stroke: #ffffff;
+  stroke-width: 1.5;
+}
+
+.eg-mistake {
+  fill: #fab219;
+  stroke: #3a3a3a;
+  stroke-width: 1.5;
+}
+
+.eg-label {
+  position: absolute;
+  right: 6px;
+  top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f2f2f2;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 0 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.eg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: center;
+}
+
+.eg-legend svg {
+  vertical-align: -1px;
+}
+
+/* Train: the two decks */
+.deck-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.deck-tabs button {
+  border: 0;
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.deck-tabs button.on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.deck-tabs button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.card-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 900px) {
+  .review {
+    --board: min(calc(100vw - 24px), 560px);
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    justify-items: center;
+  }
+  .review-head,
+  .review-board,
+  .review-side {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .review-head,
+  .review-side {
+    width: 100%;
+    max-width: 560px;
+  }
+  .game-row {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 600px) {
+  .game-stats {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0;
+  }
+}

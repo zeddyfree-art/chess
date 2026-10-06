@@ -33,6 +33,7 @@ const PATHS = {
   flag: 'M4 22V4M4 4h13l-2 4 2 4H4',
   copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
   external: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
+  games: 'M3 3v18h18M7 15l4-5 3 3 6-7',
 } as const;
 
 export type IconName = keyof typeof PATHS;

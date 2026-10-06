@@ -40,10 +40,10 @@
   </nav>
 
   <h1>Privacy Policy</h1>
-  <p class="meta">Repertoire · Last updated 29 September 2026</p>
+  <p class="meta">Repertoire · Last updated 6 October 2026</p>
 
   <div class="summary">
-    <p><strong>In short:</strong> Repertoire has no server and no user accounts. It does not collect, receive or sell your personal data, and it has no analytics, advertising or tracking. Your repertoires and settings stay in your own browser. If you choose to connect Google Drive, they are also stored in a folder in <em>your own</em> Drive.</p>
+    <p><strong>In short:</strong> Repertoire has no server and no user accounts. It does not collect, receive or sell your personal data, and it has no analytics, advertising or tracking. Your repertoires, games and settings stay in your own browser. If you choose to connect Google Drive, they are also stored in a folder in <em>your own</em> Drive.</p>
   </div>
 
   <h2>Who runs this app</h2>
@@ -59,7 +59,8 @@
       <tr><td>Lichess login token and username, if you connect Lichess</td><td>In your browser only.</td></tr>
       <tr><td>Google access token (valid about one hour), the connected account’s email address or name, and sync bookkeeping, if you connect Google Drive</td><td>In your browser only.</td></tr>
       <tr><td>Cached Lichess database answers and the Maia model, if you use them</td><td>In your browser (IndexedDB).</td></tr>
-      <tr><td>Sync file and daily backups, if you connect Google Drive</td><td>In a folder called “Repertoire app” in your own Google Drive.</td></tr>
+      <tr><td>Games you import (from Lichess or a PGN file), their analysis, and your Lichess username and the names you use in PGN files, if you enter them</td><td>In your browser (IndexedDB); with Google Drive connected, also in your Drive.</td></tr>
+      <tr><td>Sync files and backups, if you connect Google Drive</td><td>In a folder called “Repertoire app” in your own Google Drive (subfolders “Sync” and “Backups”).</td></tr>
     </tbody>
   </table>
   </div>
@@ -69,7 +70,7 @@
   <p>Your browser connects to these services directly. The connections are only made when the feature is used.</p>
   <ul>
     <li><strong>GitHub</strong> hosts the app (GitHub Pages). Like any web host, GitHub receives technical data such as your IP address and browser type when you load the site, under <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener">GitHub’s privacy statement</a>. We do not receive that data. The human-like opponent model may also be downloaded from <code>raw.githubusercontent.com</code>.</li>
-    <li><strong>Lichess</strong> (<code>lichess.org</code>, <code>explorer.lichess.org</code>): to show what is played in the Opening Explorer and to fetch engine evaluations, the app sends chess positions (as FEN text) and your chosen rating and time-control filters. If you log in with Lichess, your access token is sent with those requests. The login itself happens on lichess.org; the app never sees your Lichess password and requests no permissions. See the <a href="https://lichess.org/privacy" rel="noopener">Lichess privacy policy</a>. Positions are sent even when you are not logged in, for engine evaluations.</li>
+    <li><strong>Lichess</strong> (<code>lichess.org</code>, <code>explorer.lichess.org</code>): to show what is played in the Opening Explorer and to fetch engine evaluations, the app sends chess positions (as FEN text) and your chosen rating and time-control filters. If you log in with Lichess, your access token is sent with those requests. The login itself happens on lichess.org; the app never sees your Lichess password and requests no permissions. See the <a href="https://lichess.org/privacy" rel="noopener">Lichess privacy policy</a>. Positions are sent even when you are not logged in, for engine evaluations. When you fetch your games, the app sends the Lichess username you entered and your period and time-control choices to the Lichess games export; your games are public on Lichess, so this needs no login.</li>
     <li><strong>Google</strong> (<code>accounts.google.com</code>, <code>www.googleapis.com</code>): only if you choose “Connect Google Drive”. Before you do, the app makes no request to Google. See <a href="https://policies.google.com/privacy" rel="noopener">Google’s privacy policy</a>.</li>
   </ul>
   <p>The chess engine (Stockfish) and the human-like opponent (Maia) run entirely on your device; the positions you analyse or play are not sent anywhere for that.</p>
@@ -77,7 +78,7 @@
   <h2>Google Drive</h2>
   <p>If you connect Google Drive, the app asks for one permission: <code>https://www.googleapis.com/auth/drive.file</code>. It lets the app create and access <em>only the files it created itself</em>. It cannot see your other files.</p>
   <ul>
-    <li><strong>What we use it for:</strong> to keep a JSON file with your players, repertoires and training progress in sync between your devices, and to store one dated backup per day (the newest 30 are kept). The app also reads the email address or name of the connected Google account, to show you which account is connected.</li>
+    <li><strong>What we use it for:</strong> to keep two JSON files in sync between your devices (one with your players, repertoires and training progress, one with your imported games and their analysis), and to store dated backups: one a day of the first (the newest 30 are kept) and one a week of the games (the newest 8). The app also reads the email address or name of the connected Google account, to show you which account is connected.</li>
     <li><strong>What we do not do:</strong> the data is not sent to us or to anyone else, not read by people, not used for advertising, profiling or analytics, and not sold or shared.</li>
     <li>The app’s use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>, including its Limited Use requirements.</li>
   </ul>

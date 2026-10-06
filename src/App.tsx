@@ -4,6 +4,7 @@ import { AuditView } from './components/AuditView';
 import { Footer } from './components/Footer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BuildView } from './components/BuildView';
+import { GamesView } from './components/GamesView';
 import { HomeView, NewRepertoireDialog } from './components/HomeView';
 import { Icon, type IconName } from './components/Icon';
 import { PlayView } from './components/PlayView';
@@ -13,6 +14,7 @@ import { TrainView } from './components/TrainView';
 import { TreeView } from './components/TreeView';
 import { googleClientId, preloadGoogle } from './lib/drive';
 import { useKey } from './lib/hooks';
+import { mistakeCounts } from './lib/mistakes';
 import { counts } from './lib/srs';
 import { activeRep, PROFILE_COLORS, useApp, type View } from './lib/store';
 import { connectDrive, reconnectMessage, syncNow, useSync } from './lib/sync';
@@ -21,9 +23,10 @@ const NAV: { view: View; label: string; icon: IconName; needsRep: boolean }[] = 
   { view: 'home', label: 'Overview', icon: 'home', needsRep: false },
   { view: 'build', label: 'Build', icon: 'board', needsRep: true },
   { view: 'tree', label: 'Tree', icon: 'tree', needsRep: true },
-  { view: 'train', label: 'Train', icon: 'train', needsRep: true },
+  { view: 'train', label: 'Train', icon: 'train', needsRep: false },
   { view: 'play', label: 'Play', icon: 'play', needsRep: false },
   { view: 'audit', label: 'Check', icon: 'audit', needsRep: true },
+  { view: 'games', label: 'Games', icon: 'games', needsRep: false },
 ];
 
 export function App() {
@@ -77,7 +80,8 @@ export function App() {
   if (needsRep && !rep) content = <HomeView />;
   else if (view === 'build') content = <BuildView key={rep!.id} />;
   else if (view === 'tree') content = <TreeView key={rep!.id} />;
-  else if (view === 'train') content = <TrainView key={rep!.id} />;
+  else if (view === 'train') content = <TrainView key={rep?.id ?? 'none'} />;
+  else if (view === 'games') content = <GamesView />;
   else if (view === 'audit') content = <AuditView key={rep!.id} />;
   else if (view === 'play') content = <PlayView />;
   else if (view === 'settings') content = <SettingsView />;
@@ -156,7 +160,11 @@ function TopBar() {
   const { setView, setActiveProfile, setActiveRep, undoLast, redoLast } = useApp.getState();
   const [creating, setCreating] = useState(false);
   const reps = data.repertoires.filter((r) => r.profileId === data.activeProfileId);
-  const due = useMemo(() => (rep ? counts(rep).due : 0), [rep]);
+  const mistakes = useApp((s) => s.data.mistakes);
+  const due = useMemo(
+    () => (rep ? counts(rep).due : 0) + mistakeCounts((mistakes ?? []).filter((m) => m.profileId === data.activeProfileId)).due,
+    [rep, mistakes, data.activeProfileId],
+  );
 
   return (
     <header className="topbar">

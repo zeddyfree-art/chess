@@ -25,7 +25,10 @@ interface Job {
   lines: EngineLine[];
 }
 
-class StockfishEngine {
+export class StockfishEngine {
+  /** Hash table size in MB (memory the engine keeps for what it has searched). */
+  constructor(private hash = 64) {}
+
   private worker: Worker | null = null;
   private ready: Promise<void> | null = null;
   private current: Job | null = null;
@@ -48,7 +51,7 @@ class StockfishEngine {
       worker.addEventListener('message', onBoot);
       worker.addEventListener('error', (e) => reject(new Error(`Stockfish failed to load: ${e.message}`)));
       worker.postMessage('uci');
-      worker.postMessage('setoption name Hash value 64');
+      worker.postMessage(`setoption name Hash value ${this.hash}`);
       worker.postMessage('isready');
     });
     return this.ready;
@@ -98,9 +101,9 @@ class StockfishEngine {
     this.searching = true;
     this.send(`setoption name MultiPV value ${job.opts.multiPv ?? 1}`);
     this.send(`position fen ${job.fen}`);
-    if (job.opts.movetime) this.send(`go movetime ${job.opts.movetime}`);
-    else if (job.opts.depth) this.send(`go depth ${job.opts.depth}`);
-    else this.send('go infinite');
+    // Both: stop at whichever comes first.
+    const limits = [job.opts.depth ? `depth ${job.opts.depth}` : '', job.opts.movetime ? `movetime ${job.opts.movetime}` : ''].filter(Boolean);
+    this.send(limits.length ? `go ${limits.join(' ')}` : 'go infinite');
   }
 
   async analyse(fen: string, opts: EngineOptions, onInfo?: (lines: EngineLine[]) => void): Promise<EngineLine[]> {
@@ -114,6 +117,11 @@ class StockfishEngine {
         this.send('stop');
       } else this.run(job);
     });
+  }
+
+  /** Forget what was searched before (a new game). */
+  newGame() {
+    if (!this.searching) this.send('ucinewgame');
   }
 
   stop() {

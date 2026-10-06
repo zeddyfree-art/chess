@@ -2,6 +2,17 @@
 // the Drive REST API. Uses the `drive.file` scope: the app can only see files it
 // created itself (a "Repertoire app" folder in the user's Drive), and Google does
 // not require app verification for it.
+//
+// The folder in your Drive:
+//   Repertoire app/
+//     Sync/                 the live copies every device syncs with
+//       repertoire-sync.json    players, repertoires, training (incl. mistake cards)
+//       games-sync.json         your imported games and their analysis
+//     Backups/
+//       Repertoire/         repertoire-backup-<date>.json, one a day, the last 30
+//       Games/              games-backup-<date>.json, one a week, the last 8
+// Files and folders are found by a tag the app puts on them (appProperties), not by name or place, so
+// renaming them does no harm.
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const API = 'https://www.googleapis.com/drive/v3';
@@ -189,9 +200,10 @@ export interface DriveFile {
   modifiedTime?: string;
   createdTime?: string;
   size?: string;
+  parents?: string[];
 }
 
-const FIELDS = 'id,name,version,modifiedTime,createdTime,size';
+const FIELDS = 'id,name,version,modifiedTime,createdTime,size,parents';
 
 async function findByRole(role: string, orderBy?: string): Promise<DriveFile[]> {
   const q = `appProperties has { key='${APP_KEY}' and value='${role}' } and trashed=false`;
@@ -206,24 +218,66 @@ export async function account(): Promise<string | null> {
   return r.user?.emailAddress ?? r.user?.displayName ?? null;
 }
 
-export async function ensureFolder(): Promise<string> {
-  const found = await findByRole('folder');
+async function ensureFolderWithRole(role: string, name: string, parent?: string): Promise<string> {
+  const found = await findByRole(role);
   if (found[0]) return found[0].id;
   const r = await api<DriveFile>(`${API}/files?fields=id`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: FOLDER_NAME,
+      name,
       mimeType: 'application/vnd.google-apps.folder',
-      appProperties: { [APP_KEY]: 'folder' },
+      appProperties: { [APP_KEY]: role },
+      ...(parent ? { parents: [parent] } : {}),
     }),
   });
   return r.id;
 }
 
+export function ensureFolder(): Promise<string> {
+  return ensureFolderWithRole('folder', FOLDER_NAME);
+}
+
+export interface Layout {
+  root: string;
+  sync: string;
+  repertoireBackups: string;
+  gameBackups: string;
+}
+
+/** The app's folder with its subfolders (created where missing). */
+export async function ensureLayout(): Promise<Layout> {
+  const root = await ensureFolder();
+  const sync = await ensureFolderWithRole('folder-sync', 'Sync', root);
+  const backups = await ensureFolderWithRole('folder-backups', 'Backups', root);
+  const repertoireBackups = await ensureFolderWithRole('folder-backups-repertoire', 'Repertoire', backups);
+  const gameBackups = await ensureFolderWithRole('folder-backups-games', 'Games', backups);
+  return { root, sync, repertoireBackups, gameBackups };
+}
+
+/** Moves a file into `folderId` (out of wherever it was). Returns the file as it is now (a move changes its
+ *  version), or null when it was already there. */
+export async function moveFile(file: DriveFile, folderId: string): Promise<DriveFile | null> {
+  const parents = file.parents ?? (await fileMeta(file.id))?.parents ?? [];
+  if (parents.length === 1 && parents[0] === folderId) return null;
+  const params = new URLSearchParams({ addParents: folderId, fields: FIELDS });
+  const remove = parents.filter((p) => p !== folderId);
+  if (remove.length) params.set('removeParents', remove.join(','));
+  return api<DriveFile>(`${API}/files/${file.id}?${params}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+}
+
 export async function findSyncFile(): Promise<DriveFile | null> {
   const files = await findByRole('sync', 'modifiedTime desc');
   return files[0] ?? null;
+}
+
+export async function findGamesFile(): Promise<DriveFile | null> {
+  const files = await findByRole('games-sync', 'modifiedTime desc');
+  return files[0] ?? null;
+}
+
+export function listGameBackups(): Promise<DriveFile[]> {
+  return findByRole('games-backup', 'createdTime desc');
 }
 
 export async function fileMeta(id: string): Promise<DriveFile | null> {

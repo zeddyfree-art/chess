@@ -55,6 +55,11 @@ export function AboutView({ standalone = false }: { standalone?: boolean }) {
           <dd>Spaced repetition: every move you play is a card that comes back just before you would forget it.</dd>
           <dt>Play</dt>
           <dd>Practice games against Maia-3, a human-like opponent, at any rating from 600 to 2600.</dd>
+          <dt>Games</dt>
+          <dd>
+            The games you played, from Lichess or a PGN file, analysed on your device: where it went wrong, what was better and
+            whether players at your level find it. The mistakes you pick become a deck of their own in Train.
+          </dd>
         </dl>
       </section>
 
@@ -63,8 +68,8 @@ export function AboutView({ standalone = false }: { standalone?: boolean }) {
         <ul>
           <li>
             <b>Your data stays with you.</b> Everything is stored in your browser. If you connect Google Drive, the app keeps a copy
-            and daily backups in a folder in your own Drive, the only part of your Drive it can see. There is no server, no
-            account and no tracking.
+            and backups in a folder in your own Drive (“Repertoire app”, with Sync and Backups inside), the only part of your Drive
+            it can see. There is no server, no account and no tracking.
           </li>
           <li>
             <b>Several devices.</b> Each device remembers its last sync, so changes made on different devices are merged move by
@@ -82,6 +87,11 @@ export function AboutView({ standalone = false }: { standalone?: boolean }) {
           <li>
             <b>Spaced repetition</b> uses FSRS, the scheduler Anki also offers: a move you know well comes back after weeks, one you
             just missed comes back today.
+          </li>
+          <li>
+            <b>Game analysis</b> follows Lichess’ public formulas for winning chances, accuracy, mistakes and game phases, and adds
+            Chess.com’s “miss”: a mistake right after your opponent’s, when the chance was there. Stockfish looks at your worst
+            moves twice, deeper the second time, and checks whether you overlooked a threat.
           </li>
           <li>
             <b>Positions, not move orders.</b> 1.d4 Nf6 2.c4 e6 and 1.c4 e6 2.d4 Nf6 reach the same position, so they share one
