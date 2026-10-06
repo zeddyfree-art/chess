@@ -11,8 +11,8 @@ import { initWakeLock } from './wakeLock';
 interface GamesState {
   loaded: boolean;
   data: GamesData;
-  /** Adds games that are not there yet. Returns how many were new. */
-  addGames(games: PlayedGame[]): { added: number; already: number };
+  /** Adds games that are not there yet; games already there get what they lacked (clock times). */
+  addGames(games: PlayedGame[]): { added: number; already: number; updated: number };
   updateGame(id: string, fn: (g: PlayedGame) => PlayedGame): void;
   deleteGames(ids: string[]): void;
   /** Puts deleted games back (undo). */
@@ -29,16 +29,27 @@ export const useGames = create<GamesState>()((set, get) => ({
 
   addGames: (incoming) => {
     const { data } = get();
-    const have = new Set(data.games.map((g) => g.id));
+    const have = new Map(data.games.map((g) => [g.id, g]));
     const fresh: PlayedGame[] = [];
-    for (const g of incoming) if (!have.has(g.id) && !fresh.some((f) => f.id === g.id)) fresh.push(g);
-    if (fresh.length) {
+    const patches = new Map<string, Partial<PlayedGame>>();
+    for (const g of incoming) {
+      const old = have.get(g.id);
+      if (!old) {
+        if (!fresh.some((f) => f.id === g.id)) fresh.push(g);
+        continue;
+      }
+      const patch = completion(old, g);
+      if (patch) patches.set(g.id, patch);
+    }
+    if (fresh.length || patches.size) {
       const deleted = { ...data.deleted };
       for (const g of fresh) delete deleted[g.id]; // imported again on purpose
-      set({ data: { ...data, games: [...fresh, ...data.games], deleted } });
-      kickQueue();
+      const now = Date.now();
+      const games = data.games.map((g) => (patches.has(g.id) ? { ...g, ...patches.get(g.id), updatedAt: now } : g));
+      set({ data: { ...data, games: [...fresh, ...games], deleted } });
+      if (fresh.length) kickQueue();
     }
-    return { added: fresh.length, already: incoming.length - fresh.length };
+    return { added: fresh.length, already: incoming.length - fresh.length, updated: patches.size };
   },
 
   updateGame: (id, fn) =>
@@ -73,6 +84,24 @@ export const useGames = create<GamesState>()((set, get) => ({
   },
 }));
 
+/** What a game fetched again adds to the copy we have: clock times, Lichess' evaluations, names it lacked. */
+function completion(old: PlayedGame, next: PlayedGame): Partial<PlayedGame> | null {
+  const patch: Partial<PlayedGame> = {};
+  if (!old.clocks?.some((c) => c !== null) && next.clocks?.some((c) => c !== null) && next.clocks.length === old.moves.length) patch.clocks = next.clocks;
+  if (!old.lichessEvals && next.lichessEvals) {
+    patch.lichessEvals = next.lichessEvals;
+    if (next.lichessBest) patch.lichessBest = next.lichessBest;
+  }
+  if (!old.opening && next.opening) patch.opening = next.opening;
+  if (!old.termination && next.termination) patch.termination = next.termination;
+  return Object.keys(patch).length ? patch : null;
+}
+
+/** Older Lichess games without clock times (fetched before the app kept them); daily games have none. */
+export function lichessGamesWithoutClocks(games: readonly PlayedGame[]): PlayedGame[] {
+  return games.filter((g) => g.id.includes('|lichess:') && g.speed !== 'correspondence' && !g.clocks?.some((c) => c !== null));
+}
+
 export function gamesOf(data: GamesData, profileId: string | null): PlayedGame[] {
   return data.games.filter((g) => g.profileId === profileId).sort((a, b) => b.playedAt - a.playedAt);
 }
@@ -94,7 +123,7 @@ export function mergeGames(local: GamesData, remote: GamesData): GamesData {
   const games = [...byId.values()]
     .filter((g) => !(deleted[g.id] !== undefined && deleted[g.id] >= g.addedAt))
     .sort((a, b) => b.playedAt - a.playedAt);
-  return { version: 1, games, deleted };
+  return { ...remote, ...local, version: 1, games, deleted };
 }
 
 function newerAnalysis(a: GameAnalysis | undefined, b: GameAnalysis | undefined): GameAnalysis | undefined {
@@ -108,7 +137,9 @@ function mergeGame(l: PlayedGame, r: PlayedGame): PlayedGame {
   const base = r.updatedAt > l.updatedAt ? r : l;
   const dismissed = [...new Set([...(l.dismissed ?? []), ...(r.dismissed ?? [])])].sort((a, b) => a - b);
   const analysis = newerAnalysis(l.analysis, r.analysis);
-  const merged: PlayedGame = { ...base, addedAt: Math.min(l.addedAt, r.addedAt), updatedAt: Math.max(l.updatedAt, r.updatedAt) };
+  // Unknown fields from either side are kept; clock times from whichever side has them.
+  const merged: PlayedGame = { ...(base === l ? r : l), ...base, addedAt: Math.min(l.addedAt, r.addedAt), updatedAt: Math.max(l.updatedAt, r.updatedAt) };
+  if (!merged.clocks && (l.clocks || r.clocks)) merged.clocks = l.clocks ?? r.clocks;
   if (analysis) merged.analysis = analysis;
   if (dismissed.length) merged.dismissed = dismissed;
   return merged;

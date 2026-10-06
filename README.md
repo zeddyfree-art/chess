@@ -80,6 +80,12 @@ symbol, note or drawing changed on both the latest edit wins. Training progress 
 wins) and does not count as editing, so training on an old copy can never undo lines added elsewhere. Deleted players and
 repertoires stay deleted.
 
+**Keep every device on the current version.** A tab that stays open for days (typical on a phone) keeps running the version
+it loaded, and an older version cannot show data that newer ones add (such as mistake cards). The app checks now and then
+whether a newer version was published and then shows *A new version of the app is available* with **Reload** (your work is
+saved first). Settings → Sync shows what this device holds (repertoires, mistake cards, games) and its app version, so you
+can compare devices. When merging, data a version does not know is kept, never dropped.
+
 The site owner has to create a Google OAuth client ID once: see [docs/google-drive-setup.md](docs/google-drive-setup.md).
 
 Switching from Chessbook, Chessable or a Lichess study: export your repertoire as PGN there and choose it under
@@ -160,6 +166,10 @@ opponent was threatening (you play their move), and then for your answer: seeing
 its tactical themes. **PGN** and **Copy** export the whole deck, one chapter per card with the better line and your move as
 a variation, for a Lichess study (Study → Add chapter → PGN; up to 64 chapters per study) or any chess program. Cards are scheduled with FSRS like your repertoire, synced with it, and after each card you
 can play the position out against Maia. One position is one card, however many games it came up in.
+
+Games fetched from Lichess before October 2026 have no clock times; **Add clock times** in the Games list fetches them
+again by their ids and adds the times (the analysis stays). For games from a PGN file, add the same file again: games you
+already have get their clock times.
 
 **Insights** (Games → Insights) puts your analysed games together, for a period (last week, month, 3 months, year, all),
 time controls and colour of your choice, and always says how many games it rests on:

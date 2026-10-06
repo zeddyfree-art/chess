@@ -137,6 +137,11 @@ export async function fetchLichessGames(q: LichessQuery): Promise<{ games: PgnGa
   if (res.status === 429) throw new Error('Lichess asks to slow down. Try again in a minute.');
   if (!res.ok) throw new Error(`Lichess responded ${res.status}.`);
 
+  return readGames(res, q.onProgress);
+}
+
+/** Reads an ndjson stream of games as they come in. */
+async function readGames(res: Response, onProgress?: (count: number) => void): Promise<{ games: PgnGame[]; skipped: { reason: string; n: number }[] }> {
   const games: PgnGame[] = [];
   const skipped = new Map<string, number>();
   const take = (line: string) => {
@@ -150,7 +155,7 @@ export async function fetchLichessGames(q: LichessQuery): Promise<{ games: PgnGa
     const g = fromLichessJson(json);
     if (typeof g === 'string') skipped.set(g, (skipped.get(g) ?? 0) + 1);
     else games.push(g);
-    q.onProgress?.(games.length);
+    onProgress?.(games.length);
   };
 
   if (res.body) {
@@ -172,4 +177,23 @@ export async function fetchLichessGames(q: LichessQuery): Promise<{ games: PgnGa
     for (const line of (await res.text()).split('\n')) take(line);
   }
   return { games, skipped: [...skipped].map(([reason, n]) => ({ reason, n })) };
+}
+
+/** Downloads games by their Lichess ids (up to 300 per request), e.g. to add clock times to games fetched before. */
+export async function fetchLichessGamesByIds(ids: readonly string[], onProgress?: (count: number) => void): Promise<PgnGame[]> {
+  const out: PgnGame[] = [];
+  const headers: Record<string, string> = { Accept: 'application/x-ndjson', 'Content-Type': 'text/plain' };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  for (let i = 0; i < ids.length; i += 300) {
+    const params = new URLSearchParams({ moves: 'true', evals: 'true', opening: 'true', clocks: 'true' });
+    const res = await fetch(`${LICHESS}/api/games/export/_ids?${params}`, { method: 'POST', headers, body: ids.slice(i, i + 300).join(',') }).catch(() => {
+      throw new Error('Could not reach Lichess. Check your internet connection.');
+    });
+    if (res.status === 429) throw new Error('Lichess asks to slow down. Try again in a minute.');
+    if (!res.ok) throw new Error(`Lichess responded ${res.status}.`);
+    const { games } = await readGames(res, (n) => onProgress?.(out.length + n));
+    out.push(...games);
+  }
+  return out;
 }

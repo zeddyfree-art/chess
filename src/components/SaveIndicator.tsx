@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { reconnectMessage, useSync, type SaveResult } from '../lib/sync';
-import { useApp, useSaveState } from '../lib/store';
+import { flushLocal, useApp, useSaveState } from '../lib/store';
+import { flushGames } from '../lib/gamesStore';
+import { useUpdate } from '../lib/version';
 import { Icon } from './Icon';
 
 function ago(t: number | null): string {
@@ -47,6 +49,32 @@ export function SyncBanner() {
         </button>
         <button className="btn ghost sm" onClick={() => setLater(true)}>
           Later
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** A newer version of the app was published while this tab was open: reload to get it (what you did is saved first). */
+export function UpdateBanner() {
+  const available = useUpdate((s) => s.available);
+  const [busy, setBusy] = useState(false);
+  if (!available) return null;
+  const reload = async () => {
+    setBusy(true);
+    await Promise.all([flushLocal(), flushGames()]).catch(() => {});
+    location.reload();
+  };
+  return (
+    <div className="sync-banner update-banner" role="status">
+      <Icon name="refresh" size={18} />
+      <div className="sync-banner-text">
+        <b>A new version of the app is available.</b>{' '}
+        <span className="muted">This tab still runs an older one, which may not show everything your other devices have. Your work is saved first.</span>
+      </div>
+      <div className="row" style={{ gap: 6 }}>
+        <button className="btn primary sm" disabled={busy} onClick={reload}>
+          <Icon name="refresh" size={14} /> Reload
         </button>
       </div>
     </div>

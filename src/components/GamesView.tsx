@@ -3,7 +3,9 @@ import { divide, formatEval, isLearnable, JUDGMENT_NAMES, moveNo, summarize, typ
 import { needsAnalysis, pauseQueue, useAnalysisQueue } from '../lib/analyzer';
 import { START_KEY } from '../lib/chess';
 import { gameLabel, gameLine, outcome, SPEED_NAMES, type GameSpeed, type PlayedGame } from '../lib/games';
-import { gamesOf, useGames } from '../lib/gamesStore';
+import { gamesOf, lichessGamesWithoutClocks, useGames } from '../lib/gamesStore';
+import { fetchLichessGamesByIds } from '../lib/lichessGames';
+import { toPlayedGame } from '../lib/games';
 import { cardFromMoment, mistakeId } from '../lib/mistakes';
 import { activeProfile, useApp } from '../lib/store';
 import { keepAwakeWanted, setKeepAwake, wakeLockSupported } from '../lib/wakeLock';
@@ -134,6 +136,7 @@ function GamesList() {
         ) : (
           <>
             {(waiting > 0 || queue.error) && <AnalysisNotice waiting={waiting} current={current} />}
+            <ClockUpdateNotice games={games} />
             {tab === 'games' && suggestions.length > 0 && (
               <div className="notice row wrap suggest-banner">
                 <Icon name="target" size={16} />
@@ -177,6 +180,45 @@ function GamesList() {
       )}
       {importing && <ImportGamesDialog profile={profile} onClose={() => setImporting(false)} />}
       {choosing && <ChooseCardsDialog suggestions={suggestions} onClose={() => setChoosing(false)} />}
+    </div>
+  );
+}
+
+/** Lichess games fetched before the app kept clock times: fetch them again to add the times (nothing else changes). */
+function ClockUpdateNotice({ games }: { games: PlayedGame[] }) {
+  const missing = useMemo(() => lichessGamesWithoutClocks(games), [games]);
+  const [busy, setBusy] = useState(false);
+  const [count, setCount] = useState(0);
+  const showToast = useApp((s) => s.showToast);
+  if (!missing.length) return null;
+  const update = async () => {
+    setBusy(true);
+    setCount(0);
+    try {
+      const byId = new Map(missing.map((g) => [g.id.split('|lichess:')[1], g]));
+      const fetched = await fetchLichessGamesByIds([...byId.keys()], setCount);
+      const again = fetched.flatMap((f) => {
+        const old = byId.get(f.sourceId.replace('lichess:', ''));
+        return old ? [toPlayedGame(f, old.profileId, old.myColor, 'lichess')] : [];
+      });
+      const { updated } = useGames.getState().addGames(again);
+      showToast(updated ? `Clock times added to ${plural(updated, 'game')}` : 'Lichess has no clock times for these games.');
+    } catch (e) {
+      showToast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="notice small row wrap">
+      <Icon name="refresh" size={16} />
+      <span style={{ flex: 1 }}>
+        {plural(missing.length, 'Lichess game')} {missing.length === 1 ? 'has' : 'have'} no clock times yet (fetched before the app kept them). Fetching{' '}
+        {missing.length === 1 ? 'it' : 'them'} again adds the times; the analysis stays as it is.
+      </span>
+      <button className="btn sm" disabled={busy} onClick={update}>
+        {busy ? `Fetching… ${count || ''}` : 'Add clock times'}
+      </button>
     </div>
   );
 }

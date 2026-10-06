@@ -8,7 +8,7 @@ import { AnalysisPill, GamesView } from './components/GamesView';
 import { HomeView, NewRepertoireDialog } from './components/HomeView';
 import { Icon, type IconName } from './components/Icon';
 import { PlayView } from './components/PlayView';
-import { SaveIndicator, SyncBanner } from './components/SaveIndicator';
+import { SaveIndicator, SyncBanner, UpdateBanner } from './components/SaveIndicator';
 import { SettingsView } from './components/SettingsView';
 import { TrainView } from './components/TrainView';
 import { TreeView } from './components/TreeView';
@@ -91,6 +91,7 @@ export function App() {
   return (
     <div className="app">
       <TopBar />
+      <UpdateBanner />
       <SyncBanner />
       <main>
         <ErrorBoundary key={view} onReset={() => useApp.getState().setView('home')}>

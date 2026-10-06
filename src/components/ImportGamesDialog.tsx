@@ -104,7 +104,7 @@ function LichessImport({ profile, onClose }: { profile: Profile; onClose: () => 
   const [busy, setBusy] = useState(false);
   const [count, setCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ added: number; already: number; notYou: number; skipped: { reason: string; n: number }[] } | null>(null);
+  const [done, setDone] = useState<{ added: number; already: number; updated: number; notYou: number; skipped: { reason: string; n: number }[] } | null>(null);
   const abort = useRef<AbortController | null>(null);
 
   const patch = (p: Partial<Prefs>) => {
@@ -168,6 +168,7 @@ function LichessImport({ profile, onClose }: { profile: Profile; onClose: () => 
             <span>already here</span>
           </div>
         </div>
+        {done.updated > 0 && <div className="small muted">{plural(done.updated, 'game')} already here got their clock times.</div>}
         {done.added > 0 && (
           <div className="small muted">
             They are analysed one by one while the app is open ({analysisEstimate(done.added)} on this device). You can keep using the app meanwhile.
@@ -291,10 +292,11 @@ function PgnImport({ profile, onClose }: { profile: Profile; onClose: () => void
     const games = mine.map((g) => toPlayedGame(g, profile.id, colorOf(g, [chosen])!));
     const r = useGames.getState().addGames(games);
     if (!known.some((k) => k.toLowerCase() === chosen.toLowerCase())) updateProfile(profile.id, { aliases: [...(profile.aliases ?? []), chosen] });
+    const clocks = r.updated ? ` Clock times added to ${plural(r.updated, 'game')} you already had.` : '';
     showToast(
       r.added
-        ? `Added ${plural(r.added, 'game')}${r.already ? ` (${r.already} already here)` : ''}. Analysing them now…`
-        : 'These games are already here.',
+        ? `Added ${plural(r.added, 'game')}${r.already ? ` (${r.already} already here)` : ''}. Analysing them now…${clocks}`
+        : `These games are already here.${clocks}`,
     );
     onClose();
   };

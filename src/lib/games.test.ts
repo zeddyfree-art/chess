@@ -285,3 +285,24 @@ describe('clocks and export', () => {
     expect(pgn).toContain('( 28... Qd4+?');
   });
 });
+
+describe('updating games and keeping unknown data', () => {
+  it('adds clock times to a game that is already there', async () => {
+    const { useGames } = await import('./gamesStore');
+    const g = daily();
+    useGames.setState({ data: { version: 1, games: [g], deleted: {} } });
+    const withClocks = { ...g, clocks: g.moves.map((_, i) => 1000 - i) };
+    const r = useGames.getState().addGames([withClocks]);
+    expect(r).toEqual({ added: 0, already: 1, updated: 1 });
+    expect(useGames.getState().data.games[0].clocks?.[3]).toBe(997);
+    // Nothing more to add the second time.
+    expect(useGames.getState().addGames([withClocks]).updated).toBe(0);
+  });
+
+  it('a merge keeps fields it does not know (written by a newer version elsewhere)', async () => {
+    const { mergeData } = await import('./merge');
+    const local = { ...EMPTY_DATA };
+    const remote = { ...EMPTY_DATA, futureThing: [1, 2, 3] } as typeof EMPTY_DATA;
+    expect((mergeData(local, remote) as unknown as { futureThing: number[] }).futureThing).toEqual([1, 2, 3]);
+  });
+});

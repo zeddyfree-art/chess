@@ -182,6 +182,8 @@ export function mergeData(local: AppData, remote: AppData, base?: SyncBase | nul
   );
 
   return {
+    // Fields this version does not know (added by a newer version on another device) are kept, not dropped.
+    ...remote,
     ...local,
     version: 1,
     profiles,

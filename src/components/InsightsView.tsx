@@ -384,7 +384,8 @@ function TimeCard({ i }: { i: Insights }) {
       <div className="card card-pad stack">
         <h3>The clock</h3>
         <div className="small faint">
-          No clock times in these games yet. Games fetched from Lichess from now on bring them, and so do PGN files with [%clk] (Chess.com, Lichess).
+          No clock times in these games yet. Lichess games fetched from now on bring them; older ones get them with “Add clock times” in the
+          Games list. For games from a PGN file (Chess.com, Lichess), add the same file again: games you already have get their clock times.
           Daily games are left out here.
         </div>
       </div>

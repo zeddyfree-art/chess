@@ -6,6 +6,7 @@ import { getLichessUser, getToken, logout, RATING_BUCKETS, ratingLabel, setToken
 import { isMaiaDownloaded, removeMaia } from '../lib/maia';
 import { stats } from '../lib/repertoire';
 import { connectDrive, disconnectDrive, driveBackups, loadDriveBackup, reconnectDrive, syncNow, useSync } from '../lib/sync';
+import { useGames } from '../lib/gamesStore';
 import { activeRep, exportBackup, parseBackup, PROFILE_COLORS, profileRating, useApp, type AppData, type Profile } from '../lib/store';
 import { ChoiceDialog, type Choice } from './Dialog';
 import { Icon } from './Icon';
@@ -283,6 +284,21 @@ export function SettingsView() {
   );
 }
 
+/** What this device holds, to compare devices at a glance (they should show the same after a sync). */
+function DeviceSummary() {
+  const data = useApp((s) => s.data);
+  const games = useGames((s) => s.data.games.length);
+  const reps = data.repertoires.length;
+  const cards = (data.mistakes ?? []).length;
+  return (
+    <div className="small muted">
+      On this device: {reps} {reps === 1 ? 'repertoire' : 'repertoires'}, {cards} mistake {cards === 1 ? 'card' : 'cards'}, {games}{' '}
+      {games === 1 ? 'game' : 'games'} · app version {__APP_COMMIT__ === 'local' ? 'local' : __APP_COMMIT__} ({__BUILD_DATE__}). After a sync, your other
+      devices should show the same numbers.
+    </div>
+  );
+}
+
 function SyncCard({ onRestore }: { onRestore: (d: AppData, source: string) => void }) {
   const sync = useSync();
   const { showToast } = useApp.getState();
@@ -312,8 +328,9 @@ function SyncCard({ onRestore }: { onRestore: (d: AppData, source: string) => vo
       <div className="section stack" style={{ gap: 10 }}>
         <div className="help">
           Connect Google Drive on each device you use (computer, tablet, phone) and they all share the same repertoires and
-          training progress. The app only sees its own folder <b>Repertoire app</b> in your Drive; once a day it also saves a
-          dated backup there (the last 30 are kept).
+          training progress, mistake cards and games. The app only sees its own folder <b>Repertoire app</b> in your Drive (with
+          the subfolders Sync and Backups); it also saves a dated backup there once a day (the last 30 are kept) and of your games
+          once a week.
         </div>
         {!configured ? (
           <div className="notice small stack" style={{ gap: 8 }}>
@@ -371,6 +388,7 @@ function SyncCard({ onRestore }: { onRestore: (d: AppData, source: string) => vo
               </button>
             </div>
             {sync.error && <div className="notice error small">{sync.error}</div>}
+            <DeviceSummary />
             <div className="row">
               <button
                 className="btn sm"
