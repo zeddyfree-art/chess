@@ -2513,3 +2513,44 @@ a.btn {
     font-size: 12px;
   }
 }
+
+.rep-card {
+  position: relative;
+}
+
+/* A handle at the top of the card, like on a sheet you can pull. */
+.drag-handle {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  touch-action: none;
+  color: var(--faint);
+  border-radius: 0 0 8px 8px;
+}
+
+.drag-handle:hover,
+.drag-handle:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.rep-card.dragging {
+  opacity: 0.75;
+  outline: 2px dashed var(--accent);
+  transform: scale(1.02);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  z-index: 2;
+}

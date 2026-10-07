@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Side } from '../lib/chess';
 import { downloadText, safeName } from '../lib/download';
 import { exportPgn, importPgn } from '../lib/pgn';
 import { newRepertoire, setStudy, stats, toMoves, type Repertoire } from '../lib/repertoire';
 import { counts, State } from '../lib/srs';
-import { activeProfile, useApp } from '../lib/store';
+import { activeProfile, orderedReps, useApp } from '../lib/store';
 import { useSync } from '../lib/sync';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
@@ -33,6 +33,82 @@ function PlayToggle({ rep }: { rep: Repertoire }) {
   );
 }
 
+/** Drag-to-reorder for the repertoire cards: with a mouse or a finger on the grip, or with the arrow keys. The new
+ *  order is saved when you let go. */
+function useReorder(ids: string[], save: (ids: string[]) => void) {
+  const [order, setOrder] = useState<string[] | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const els = useRef(new Map<string, HTMLElement>());
+  const current = useRef<string[] | null>(null);
+
+  const move = (list: string[], id: string, to: number) => {
+    const from = list.indexOf(id);
+    if (from < 0 || to < 0 || to >= list.length || from === to) return list;
+    const next = [...list];
+    next.splice(from, 1);
+    next.splice(to, 0, id);
+    return next;
+  };
+  const finish = () => {
+    const final = current.current;
+    current.current = null;
+    setDragging(null);
+    setOrder(null);
+    if (final && final.join() !== ids.join()) save(final);
+  };
+
+  return {
+    order,
+    dragging,
+    register: (id: string, el: HTMLElement | null) => {
+      if (el) els.current.set(id, el);
+      else els.current.delete(id);
+    },
+    handle: (id: string) => ({
+      onClick: (e: React.MouseEvent) => e.stopPropagation(),
+      onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        current.current = ids;
+        setOrder(ids);
+        setDragging(id);
+      },
+      onPointerMove: (e: React.PointerEvent) => {
+        const list = current.current;
+        if (!list || dragging !== id) return;
+        // Over another card: take its place.
+        for (const [other, el] of els.current) {
+          if (other === id) continue;
+          const r = el.getBoundingClientRect();
+          if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+            const next = move(list, id, list.indexOf(other));
+            if (next !== list) {
+              current.current = next;
+              setOrder(next);
+            }
+            break;
+          }
+        }
+        // Near the top or bottom of the screen: scroll along.
+        if (e.clientY < 60) scrollBy(0, -14);
+        else if (e.clientY > innerHeight - 60) scrollBy(0, 14);
+      },
+      onPointerUp: finish,
+      onPointerCancel: finish,
+      onKeyDown: (e: React.KeyboardEvent) => {
+        const step = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : 0;
+        if (!step) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const next = move(ids, id, ids.indexOf(id) + step);
+        if (next !== ids) save(next);
+      },
+    }),
+  };
+}
+
 export function HomeView() {
   const data = useApp((s) => s.data);
   const profile = useApp(activeProfile);
@@ -40,7 +116,9 @@ export function HomeView() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Repertoire | null>(null);
   const [importingId, setImportingId] = useState<string | null>(null);
-  const reps = data.repertoires.filter((r) => r.profileId === data.activeProfileId);
+  const ordered = useMemo(() => orderedReps(data, data.activeProfileId), [data]);
+  const reorder = useReorder(ordered.map((r) => r.id), (ids) => profile && useApp.getState().updateProfile(profile.id, { repOrder: ids }));
+  const reps = reorder.order ? (reorder.order.map((id) => ordered.find((r) => r.id === id)).filter(Boolean) as Repertoire[]) : ordered;
 
   const summaries = useMemo(() => reps.map((r) => ({ rep: r, stats: stats(r), srs: counts(r) })), [reps]);
   const totalDue = summaries.reduce((a, s) => a + s.srs.due, 0);
@@ -76,7 +154,22 @@ export function HomeView() {
 
       <div className="home-grid">
         {summaries.map(({ rep, stats: st, srs }) => (
-          <div key={rep.id} className={`card rep-card ${rep.id === data.activeRepId ? 'active' : ''} ${rep.study ? 'study' : ''}`} onClick={() => open(rep.id, 'build')}>
+          <div
+            key={rep.id}
+            ref={(el) => reorder.register(rep.id, el)}
+            className={`card rep-card ${rep.id === data.activeRepId ? 'active' : ''} ${rep.study ? 'study' : ''} ${reorder.dragging === rep.id ? 'dragging' : ''}`}
+            onClick={() => open(rep.id, 'build')}
+          >
+            {reps.length > 1 && (
+              <button
+                className="drag-handle"
+                title="Drag to change the order (or focus it and use the arrow keys)"
+                aria-label={`Move ${rep.name}`}
+                {...reorder.handle(rep.id)}
+              >
+                <Icon name="grip" size={18} />
+              </button>
+            )}
             <div className="row">
               <div className={`side-icon ${rep.side}`}>{rep.side === 'white' ? '♔' : '♚'}</div>
               <div style={{ minWidth: 0, flex: 1 }}>

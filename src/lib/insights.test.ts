@@ -119,3 +119,13 @@ describe('repertoires in play and study repertoires', () => {
     expect(!!back.repertoires[0].study).toBe(false);
   });
 });
+
+describe('repertoire order', () => {
+  it('follows the player’s order, with new repertoires at the end', async () => {
+    const { orderedReps } = await import('./store');
+    const reps = ['a', 'b', 'c', 'd'].map((id) => ({ ...newRepertoire('p1', id, 'white'), id }));
+    const profiles = [{ id: 'p1', name: 'p', color: '#000', ratings: [], speeds: [], repOrder: ['c', 'a'] }];
+    expect(orderedReps({ repertoires: reps, profiles }, 'p1').map((r) => r.id)).toEqual(['c', 'a', 'b', 'd']);
+    expect(orderedReps({ repertoires: reps, profiles: [{ ...profiles[0], repOrder: undefined }] }, 'p1').map((r) => r.id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+});

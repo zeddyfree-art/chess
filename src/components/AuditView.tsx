@@ -11,7 +11,18 @@ export function AuditView() {
   const profile = useApp(activeProfile)!;
   const { goToSans, updateRep, setView } = useApp.getState();
 
-  const [gapOpts, setGapOpts] = useState({ minReach: 0.01, maxPly: 20 });
+  // 2% by default: a reply you meet in one of every fifty games with this colour. Your last choice is remembered.
+  const [gapOpts, setGapOptsState] = useState(() => ({ minReach: Number(localStorage.getItem('gap-min-reach')) || 0.02, maxPly: 20 }));
+  const setGapOpts = (fn: (o: typeof gapOpts) => typeof gapOpts) =>
+    setGapOptsState((o) => {
+      const next = fn(o);
+      try {
+        localStorage.setItem('gap-min-reach', String(next.minReach));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
   const [gapRun, setGapRun] = useState<{ done: number; line: string[] } | null>(null);
   const [gaps, setGaps] = useState<GapReport | null>(null);
   const [gapError, setGapError] = useState<Error | null>(null);
@@ -80,6 +91,12 @@ export function AuditView() {
             Walks through your repertoire and compares every position where the opponent is to move with what is actually
             played in the Lichess database (filters of <b>{profile.name}</b>). You see which replies you are still missing,
             sorted by how often you will meet them.
+          </div>
+          <div className="help">
+            The percentage is <b>of all your games with {rep.side === 'white' ? 'White' : 'Black'}</b> (like Chessbook): the shares of the
+            opponent’s moves multiplied along the line. A reply played 10% of the time, in a position you reach in 20% of your
+            games, counts as 2%. (The red boxes in the Tree look at one position at a time instead: a reply played in at least 5% of
+            the games from that position.)
           </div>
           <div className="row wrap">
             <span className="muted small">Ignore what occurs in less than</span>

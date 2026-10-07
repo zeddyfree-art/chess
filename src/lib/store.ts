@@ -22,6 +22,8 @@ export interface Profile {
   lichess?: string;
   /** Names the player uses in PGN files of their games (other sites, over-the-board), to tell their colour. */
   aliases?: string[];
+  /** The order of the player's repertoires on the Overview (ids); others follow in the order they were made. */
+  repOrder?: string[];
   updatedAt?: number;
 }
 
@@ -400,6 +402,17 @@ export const useApp = create<AppState>()((set, get) => {
 
 export function activeRep(s: Pick<AppState, 'data'>): Repertoire | null {
   return s.data.repertoires.find((r) => r.id === s.data.activeRepId) ?? null;
+}
+
+/** A player's repertoires in the order they arranged them. */
+export function orderedReps(data: Pick<AppData, 'repertoires' | 'profiles'>, profileId: string | null): Repertoire[] {
+  const reps = data.repertoires.filter((r) => r.profileId === profileId);
+  const order = data.profiles.find((p) => p.id === profileId)?.repOrder ?? [];
+  const pos = (r: Repertoire) => {
+    const i = order.indexOf(r.id);
+    return i < 0 ? order.length + reps.indexOf(r) : i;
+  };
+  return [...reps].sort((a, b) => pos(a) - pos(b));
 }
 
 export function activeProfile(s: Pick<AppState, 'data'>): Profile | null {

@@ -16,7 +16,7 @@ import { googleClientId, preloadGoogle } from './lib/drive';
 import { useKey } from './lib/hooks';
 import { mistakeCounts } from './lib/mistakes';
 import { counts } from './lib/srs';
-import { activeRep, PROFILE_COLORS, useApp, type View } from './lib/store';
+import { activeRep, orderedReps, PROFILE_COLORS, useApp, type View } from './lib/store';
 import { connectDrive, reconnectMessage, syncNow, useSync } from './lib/sync';
 
 const NAV: { view: View; label: string; icon: IconName; needsRep: boolean }[] = [
@@ -160,7 +160,7 @@ function TopBar() {
   const canRedo = useApp((s) => s.redo.length > 0);
   const { setView, setActiveProfile, setActiveRep, undoLast, redoLast } = useApp.getState();
   const [creating, setCreating] = useState(false);
-  const reps = data.repertoires.filter((r) => r.profileId === data.activeProfileId);
+  const reps = useMemo(() => orderedReps(data, data.activeProfileId), [data]);
   const mistakes = useApp((s) => s.data.mistakes);
   const due = useMemo(
     () => (rep ? counts(rep).due : 0) + mistakeCounts((mistakes ?? []).filter((m) => m.profileId === data.activeProfileId)).due,
