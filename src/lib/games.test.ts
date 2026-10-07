@@ -206,6 +206,8 @@ describe('mistake cards', () => {
     expect(merged.card).toBe(trained.card);
     expect(merged.games).toHaveLength(2);
     expect(mistakeQueue([trained, edited], 10, 10_000_000_000).map((m) => m.card.state)).toEqual([trained.card.state, edited.card.state]);
+    // 0 new cards: only the reviews.
+    expect(mistakeQueue([trained, edited], 0, 10_000_000_000).map((m) => m.card.state)).toEqual([trained.card.state]);
   });
 
   it('sync sees training of a mistake card as training, a new card as an edit', () => {

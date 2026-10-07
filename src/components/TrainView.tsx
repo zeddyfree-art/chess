@@ -119,14 +119,23 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
             </div>
             <div className="row wrap">
               <span className="muted">New moves per session</span>
-              {[5, 10, 20, 50].map((n) => (
-                <span key={n} className={`chip ${newLimit === n ? 'on' : ''}`} onClick={() => setNewLimit(n)}>
+              {[0, 5, 10, 20, 50].map((n) => (
+                <span
+                  key={n}
+                  className={`chip ${newLimit === n ? 'on' : ''}`}
+                  onClick={() => setNewLimit(n)}
+                  title={n === 0 ? 'Only reviews: no new moves this session' : undefined}
+                >
                   {n}
                 </span>
               ))}
+              {newLimit === 0 && <span className="small muted">only reviews</span>}
             </div>
+            {newLimit === 0 && !c.due && c.fresh > 0 && (
+              <div className="help">Nothing to review right now. Choose a number of new moves to learn some.</div>
+            )}
             <div className="row wrap">
-              <button className="btn primary" disabled={!c.due && !c.fresh} onClick={startReview}>
+              <button className="btn primary" disabled={!(c.due + Math.min(c.fresh, newLimit))} onClick={startReview}>
                 <Icon name="train" size={16} /> Start review ({c.due + Math.min(c.fresh, newLimit)})
               </button>
               {scope && (

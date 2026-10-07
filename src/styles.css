@@ -463,6 +463,68 @@ main {
 
 /* ---------- Board ---------- */
 
+/* Coordinates inside the board, in the corner of their own square at any board size: rank numbers top left on the
+   left-hand file, file letters bottom right on the bottom rank. (chessground's default stylesheet moves them by fixed
+   pixels, which only lines up on large boards: on a phone every letter landed in the next square.) */
+cg-container {
+  container-type: inline-size;
+}
+
+.cg-wrap coords {
+  font-family: inherit;
+  font-size: clamp(10px, 2.4cqw, 14px);
+  font-weight: 600;
+  line-height: 1;
+  opacity: 1;
+  /* Above the pieces (2), which otherwise hide the letters on the bottom rank; below a dragged piece (11). */
+  z-index: 3;
+}
+
+.cg-wrap coords.ranks,
+.cg-wrap coords.ranks.left {
+  top: 0;
+  left: 0;
+  width: auto;
+  height: 100%;
+  align-items: flex-start;
+}
+
+.cg-wrap coords.files {
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: auto;
+  text-align: right;
+  text-transform: none;
+}
+
+.cg-wrap coords coord {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.cg-wrap coords.ranks coord {
+  transform: none;
+  padding: 0.25em 0 0 0.3em;
+}
+
+.cg-wrap coords.files coord {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0 0.3em 0.2em 0;
+}
+
+/* Brown on both square colours: these squares are too light for light lettering to stay readable. */
+.cg-wrap coords:is(.ranks, .files) coord.coord-light {
+  color: #93754f;
+}
+
+.cg-wrap coords:is(.ranks, .files) coord.coord-dark {
+  color: #5f4a30;
+}
+
 .board-area {
   display: flex;
   gap: 8px;

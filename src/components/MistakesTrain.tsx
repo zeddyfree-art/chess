@@ -91,14 +91,27 @@ export function MistakesTrain() {
             </div>
             <div className="row wrap">
               <span className="muted">New cards per session</span>
-              {[5, 10, 20].map((n) => (
-                <span key={n} className={`chip ${newLimit === n ? 'on' : ''}`} onClick={() => setNewLimit(n)}>
+              {[0, 5, 10, 20].map((n) => (
+                <span
+                  key={n}
+                  className={`chip ${newLimit === n ? 'on' : ''}`}
+                  onClick={() => setNewLimit(n)}
+                  title={n === 0 ? 'Only reviews: no new cards this session' : undefined}
+                >
                   {n}
                 </span>
               ))}
+              {newLimit === 0 && <span className="small muted">only reviews</span>}
             </div>
+            {newLimit === 0 && !c.due && c.fresh > 0 && (
+              <div className="help">Nothing to review right now. Choose a number of new cards to start on some.</div>
+            )}
             <div className="row wrap">
-              <button className="btn primary" disabled={!c.due && !c.fresh} onClick={() => setSession(mistakeQueue(cards, newLimit))}>
+              <button
+                className="btn primary"
+                disabled={!(c.due + Math.min(c.fresh, newLimit))}
+                onClick={() => setSession(mistakeQueue(cards, newLimit))}
+              >
                 <Icon name="train" size={16} /> Start ({c.due + Math.min(c.fresh, newLimit)})
               </button>
               <button className="btn" onClick={() => setSession([...cards].sort(() => Math.random() - 0.5))} title="All your mistake cards, due or not">

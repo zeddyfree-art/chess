@@ -103,6 +103,8 @@ export function Board({ position, orientation, movable, lastMove, shapes, drawn,
       animation: { enabled: true, duration: 180 },
       highlight: { lastMove: true, check: true },
       coordinates: true,
+      // Rank numbers on the left-hand file, so chessground marks each label with the colour of the square it is on.
+      ranksPosition: 'left',
       draggable: { showGhost: true },
       drawable: {
         enabled: true,
