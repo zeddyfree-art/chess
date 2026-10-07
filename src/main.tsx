@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { pruneCheckResults } from './lib/checkResults';
+import { takeOverDeviceResults } from './lib/checkResults';
 import { completeLoginIfRedirected } from './lib/lichess';
 import { loadGames } from './lib/gamesStore';
 import { loadData, useApp } from './lib/store';
@@ -24,8 +24,20 @@ addEventListener('unhandledrejection', (e) => {
   if (msg) useApp.getState().showToast(`Error: ${msg}`);
 });
 
+/** Check results now live in the synced data: take over the ones the previous version kept on this device only, and
+ *  drop those of repertoires that are gone. */
+async function tidyCheckResults() {
+  const old = await takeOverDeviceResults().catch(() => ({}));
+  const { data, saveChecks } = useApp.getState();
+  const ids = new Set(data.repertoires.map((r) => r.id));
+  for (const [id, results] of Object.entries(old)) if (ids.has(id) && !data.checks?.[id]) saveChecks(id, results);
+  const checks = useApp.getState().data.checks;
+  if (checks && Object.keys(checks).some((id) => !ids.has(id)))
+    useApp.setState((s) => ({ data: { ...s.data, checks: Object.fromEntries(Object.entries(checks).filter(([id]) => ids.has(id))) } }));
+}
+
 Promise.all([loadData(), loadGames()]).then(() => {
-  void pruneCheckResults(useApp.getState().data.repertoires.map((r) => r.id)).catch(() => {});
+  void tidyCheckResults();
   initSync();
   initUpdateCheck();
   completeLoginIfRedirected()

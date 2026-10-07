@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { engineStatus, gapStatus, lineEndStatus, loadCheckResults, useCheckResults, type CheckResults, type ItemStatus } from '../lib/checkResults';
+import { engineStatus, gapStatus, lineEndStatus, type CheckResults, type ItemStatus } from '../lib/checkResults';
 import type { Repertoire } from '../lib/repertoire';
 import { useApp, type CheckTour } from '../lib/store';
 import { formatPct } from './ExplorerPanel';
@@ -14,6 +13,8 @@ export interface TourItem {
   line: string[];
   label: React.ReactNode;
   status: ItemStatus;
+  /** Share of your games (gaps and line ends). */
+  reach?: number;
 }
 
 /** The items of one result list, in the order shown on the Check page. */
@@ -22,6 +23,7 @@ export function tourItems(rep: Repertoire, saved: CheckResults | undefined, kind
     return (saved?.gaps?.report.gaps ?? []).map((g) => ({
       id: `${g.key}|${g.san}`,
       line: g.line,
+      reach: g.reach,
       label: (
         <>
           {numbered(g.line, g.san)} <span className="muted">· {formatPct(g.reach)} of your games</span>
@@ -33,6 +35,7 @@ export function tourItems(rep: Repertoire, saved: CheckResults | undefined, kind
     return (saved?.gaps?.report.lineEnds ?? []).map((e) => ({
       id: e.key,
       line: e.line,
+      reach: e.reach,
       label: (
         <>
           ends after {e.line.length ? numbered(e.line.slice(0, -1), e.line[e.line.length - 1]) : 'the start'} <span className="muted">· {formatPct(e.reach)}</span>
@@ -66,9 +69,8 @@ const KIND_NAMES: Record<CheckTour['kind'], string> = { gaps: 'Missing reply', e
 /** On the Build board while going through a check's results: where you are, what is done, and on to the next. */
 export function CheckTourBar({ rep }: { rep: Repertoire }) {
   const tour = useApp((s) => s.checkTour);
-  const saved = useCheckResults((s) => s.byRep[rep.id]);
+  const saved = useApp((s) => s.data.checks?.[rep.id]);
   const { tourTo, goToSans, setView } = useApp.getState();
-  useEffect(() => loadCheckResults(rep.id), [rep.id]);
   if (!tour || tour.repId !== rep.id) return null;
   const items = tourItems(rep, saved, tour.kind);
   const byId = new Map(items.map((it) => [it.id, it]));

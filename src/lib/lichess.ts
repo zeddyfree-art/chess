@@ -189,7 +189,8 @@ function cached<T>(key: string, ttl: number, fetcher: () => Promise<T>): Promise
   return p;
 }
 
-/** Synchronous peek into the in-memory cache (used by the tree view to decorate nodes without fetching). */
+/** Synchronous peek into the in-memory cache (used by the tree view to decorate nodes without fetching, and by the gap
+ *  check to count what it has to ask Lichess). */
 export function peekCache<T>(key: string): T | undefined {
   return memCache.get(key) as T | undefined;
 }
@@ -202,7 +203,8 @@ export async function warmCache(keys: string[]): Promise<number> {
   const values = (await getMany(missing, cacheStore).catch(() => [])) as ({ at: number; value: unknown } | undefined)[];
   let n = 0;
   values.forEach((hit, i) => {
-    if (hit) {
+    // Older answers are fetched again when asked for (as `cached` does).
+    if (hit && Date.now() - hit.at < EXPLORER_TTL) {
       memCache.set(missing[i], hit.value);
       n++;
     }

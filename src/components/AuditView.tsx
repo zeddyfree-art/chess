@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatLine } from '../lib/chess';
 import { engineCheck, findGaps, lossLabel } from '../lib/audit';
-import { loadCheckResults, saveCheckResults, useCheckResults } from '../lib/checkResults';
+import { engineChanged, gapFilters, gapsChanged, savedEngine, savedGaps } from '../lib/checkResults';
 import { StatusMark, tourItems, type TourItem } from './CheckTour';
 import type { CheckTour } from '../lib/store';
 import { AuthRequiredError, getToken, startLogin } from '../lib/lichess';
@@ -26,11 +26,11 @@ export function AuditView() {
       }
       return next;
     });
-  const [gapRun, setGapRun] = useState<{ done: number; line: string[] } | null>(null);
+  const [gapRun, setGapRun] = useState<{ done: number; line: string[]; lookups: number } | null>(null);
   const [gapError, setGapError] = useState<Error | null>(null);
-  // The last results stay (on this device) until you run the check again: work through them one by one.
-  const saved = useCheckResults((s) => s.byRep[rep.id]);
-  useEffect(() => loadCheckResults(rep.id), [rep.id]);
+  // The last results stay (synced with your data) until you run the check again: work through them one by one.
+  const saved = useApp((s) => s.data.checks?.[rep.id]);
+  const saveChecks = useApp((s) => s.saveChecks);
   const gaps = saved?.gaps?.report ?? null;
   const issues = saved?.engine?.issues ?? null;
   const [hideDone, setHideDone] = useState(() => localStorage.getItem('check-hide-done') === '1');
@@ -43,7 +43,12 @@ export function AuditView() {
     }
   };
 
-  const [engOpts, setEngOpts] = useState({ threshold: 50, maxPly: 24, localDepth: 16 });
+  const [engOpts, setEngOpts] = useState(() => ({
+    threshold: saved?.engine?.threshold ?? 50,
+    maxPly: 24,
+    localDepth: saved?.engine?.depth ?? 16,
+  }));
+  const [evaluateAll, setEvaluateAll] = useState(false);
   const [engRun, setEngRun] = useState<{ done: number; total: number; line: string[] } | null>(null);
   const [engError, setEngError] = useState<Error | null>(null);
 
@@ -56,15 +61,15 @@ export function AuditView() {
     const ctrl = new AbortController();
     abort.current = ctrl;
     setGapError(null);
-    setGapRun({ done: 0, line: [] });
+    setGapRun({ done: 0, line: [], lookups: 0 });
     try {
       const report = await findGaps(
         rep,
         { ratings: profile.ratings, speeds: profile.speeds, ...gapOpts },
-        (done, line) => setGapRun({ done, line }),
+        (done, line, lookups) => setGapRun({ done, line, lookups }),
         ctrl.signal,
       );
-      saveCheckResults(rep.id, { gaps: { report, at: Date.now(), minReach: gapOpts.minReach } });
+      saveChecks(rep.id, { gaps: savedGaps(rep, report, gapOpts.minReach, filters) });
     } catch (e) {
       if ((e as Error).name !== 'AbortError') setGapError(e as Error);
     } finally {
@@ -79,9 +84,16 @@ export function AuditView() {
     setEngError(null);
     setEngRun({ done: 0, total: 0, line: [] });
     try {
-      const { flags, issues } = await engineCheck(rep, engOpts, (done, total, line) => setEngRun({ done, total, line }), ctrl.signal);
+      const { flags, issues, evaluated, reused } = await engineCheck(
+        rep,
+        engOpts,
+        (done, total, line) => setEngRun({ done, total, line }),
+        ctrl.signal,
+        evaluateAll ? undefined : rep.engine,
+      );
       updateRep(rep.id, (r) => ({ ...r, engine: { ...r.engine, ...flags } }), 'engine check', { undoable: false });
-      saveCheckResults(rep.id, { engine: { issues, at: Date.now(), threshold: engOpts.threshold } });
+      saveChecks(rep.id, { engine: { ...savedEngine(rep, issues, engOpts.threshold, engOpts.localDepth), evaluated, reused } });
+      setEvaluateAll(false);
     } catch (e) {
       if ((e as Error).name !== 'AbortError') setEngError(e as Error);
     } finally {
@@ -98,12 +110,20 @@ export function AuditView() {
     tourTo({ repId: rep.id, kind, ids, index: ids.indexOf(item.id) });
     goToSans(item.line);
   };
-  const gapItems = tourItems(rep, saved, 'gaps');
+  const filters = gapFilters({ ratings: profile.ratings, speeds: profile.speeds, maxPly: gapOpts.maxPly });
+  const gapChange = saved?.gaps ? gapsChanged(rep, saved.gaps, filters) : null;
+  // A higher threshold than the search used is a filter on its results; a lower one needs a new search.
+  const shownMin = Math.max(gapOpts.minReach, saved?.gaps?.minReach ?? 0);
+  const needsLower = !!saved?.gaps && gapOpts.minReach < saved.gaps.minReach;
+  const engChange = saved?.engine ? engineChanged(rep, saved.engine) : null;
+  const engSettings =
+    !!saved?.engine && (engOpts.threshold !== saved.engine.threshold || (saved.engine.depth !== undefined && engOpts.localDepth !== saved.engine.depth));
+  const gapItems = tourItems(rep, saved, 'gaps').filter((it) => (it.reach ?? 1) >= shownMin);
   const endItems = tourItems(rep, saved, 'ends');
   const engineItems = tourItems(rep, saved, 'engine');
   // A reply you added since the check moves its games inside your preparation (at least until that line ends).
   const coverage = gaps
-    ? Math.min(1, gaps.coverage + gaps.gaps.reduce((a, g, i) => a + (gapItems[i]?.status.state !== 'open' ? g.reach : 0), 0))
+    ? Math.min(1, gaps.coverage + gapItems.reduce((a, it) => a + (it.status.state !== 'open' ? (it.reach ?? 0) : 0), 0))
     : 0;
   const doneCount = (items: TourItem[]) => items.filter((x) => x.status.state === 'done').length;
   const visible = (items: TourItem[]) => (hideDone ? items.filter((x) => x.status.state !== 'done') : items);
@@ -146,15 +166,33 @@ export function AuditView() {
                   Stop
                 </button>
                 <span className="small muted">
-                  {gapRun.done} positions checked… {formatLine(gapRun.line.slice(-6), Math.max(0, gapRun.line.length - 6))}
+                  {gapRun.done} positions checked{gapRun.lookups ? ` (${gapRun.lookups} asked from Lichess)` : ''}…{' '}
+                  {formatLine(gapRun.line.slice(-6), Math.max(0, gapRun.line.length - 6))}
                 </span>
               </>
             ) : (
-              <button className={`btn ${gaps ? '' : 'primary'}`} onClick={runGaps}>
+              <button className={`btn ${!gaps || gapChange || needsLower ? 'primary' : ''}`} onClick={runGaps}>
                 {gaps ? 'Find gaps again' : 'Find gaps'}
               </button>
             )}
           </div>
+          {saved?.gaps && !gapRun && (
+            <StaleNote
+              stale={
+                gapChange === 'repertoire'
+                  ? 'You changed this repertoire since this search (✓ shows what you dealt with). When you are done, search again to see where it stands now, including deeper in what you added.'
+                  : gapChange === 'unknown'
+                    ? 'This search was made before the app kept track of changes. Search again to be sure it is up to date.'
+                  : gapChange === 'filters'
+                    ? `${profile.name}’s Lichess filters (ratings, time controls) changed since this search. Search again to use them.`
+                    : needsLower
+                      ? `These results go down to ${formatPct(saved.gaps.minReach)} of your games. Search again to go down to ${formatPct(gapOpts.minReach)}.`
+                      : null
+              }
+              fresh="Up to date: you have not changed this repertoire since this search."
+              how="The search always walks your whole repertoire; positions this device looked up in the last 30 days come from its cache, so only new ones are asked from Lichess."
+            />
+          )}
           {!getToken() && (
             <div className="notice small">
               This needs your Lichess account to be connected.{' '}
@@ -191,7 +229,7 @@ export function AuditView() {
             <div className="section">
               <div className="row wrap" style={{ marginBottom: 6 }}>
                 <h3>
-                  Missing replies ({gaps.gaps.length}
+                  Missing replies ({gapItems.length}
                   {doneCount(gapItems) ? ` · ${doneCount(gapItems)} done` : ''})
                 </h3>
                 <span className="spacer" />
@@ -201,11 +239,12 @@ export function AuditView() {
               </div>
               {saved?.gaps && (
                 <div className="small faint" style={{ marginBottom: 6 }}>
-                  Found {timeAgo(saved.gaps.at)}, from {formatPct(saved.gaps.minReach)} of your games. Click one to open it on the board; the
-                  board then takes you to the next. ✓ means your repertoire now has the reply and your answer.
+                  Found {timeAgo(saved.gaps.at)}, from {formatPct(shownMin)} of your games
+                  {gaps.lookups !== undefined && ` (${gaps.positions} positions, ${gaps.lookups} of them asked from Lichess)`}. Click one to open it
+                  on the board; the board then takes you to the next. ✓ means your repertoire now has the reply and your answer.
                 </div>
               )}
-              {gaps.gaps.length === 0 && <div className="empty">No gaps above the threshold. Nice!</div>}
+              {gapItems.length === 0 && <div className="empty">No gaps above the threshold. Nice!</div>}
               <div className="result-list">
                 {visible(gapItems).map((it) => {
                   const g = gaps.gaps.find((x) => `${x.key}|${x.san}` === it.id)!;
@@ -291,11 +330,33 @@ export function AuditView() {
                 </span>
               </>
             ) : (
-              <button className={`btn ${issues ? '' : 'primary'}`} onClick={runEngine}>
-                {issues ? 'Check again' : 'Check my moves'}
-              </button>
+              <>
+                <button className={`btn ${!issues || engChange || engSettings ? 'primary' : ''}`} onClick={runEngine}>
+                  {issues ? 'Check again' : 'Check my moves'}
+                </button>
+                {issues && (
+                  <label className="row small muted" style={{ gap: 4, cursor: 'pointer' }} title="Also evaluate the moves that were evaluated before">
+                    <input type="checkbox" checked={evaluateAll} onChange={(e) => setEvaluateAll(e.target.checked)} /> evaluate all again
+                  </label>
+                )}
+              </>
             )}
           </div>
+          {saved?.engine && !engRun && (
+            <StaleNote
+              stale={
+                engChange === 'repertoire'
+                  ? 'You changed your moves in this repertoire since this check. Check again to rate the new ones.'
+                  : engChange === 'unknown'
+                    ? 'This check was made before the app kept track of changes. Check again to be sure it is up to date.'
+                  : engSettings
+                    ? `These results are from ${(saved.engine.threshold / 100).toFixed(1)} pawn${saved.engine.depth ? `, depth ${saved.engine.depth}` : ''}. Check again with the new setting.`
+                    : null
+              }
+              fresh="Up to date: you have not changed your moves since this check."
+              how="A move’s evaluation depends only on its position, so moves already evaluated at least this deep keep it and only new or deeper ones take time. The result is the same as evaluating everything again."
+            />
+          )}
           {engRun && engRun.total > 0 && (
             <div className="progress">
               <div style={{ width: `${(engRun.done / engRun.total) * 100}%` }} />
@@ -323,8 +384,9 @@ export function AuditView() {
             </div>
             {saved?.engine && (
               <div className="small faint" style={{ marginBottom: 6 }}>
-                Checked {timeAgo(saved.engine.at)}, from {(saved.engine.threshold / 100).toFixed(1)} pawn. ✓ means you changed the move or
-                added the engine’s move.
+                Checked {timeAgo(saved.engine.at)}, from {(saved.engine.threshold / 100).toFixed(1)} pawn
+                {saved.engine.evaluated !== undefined && ` (${saved.engine.evaluated} evaluated, ${saved.engine.reused} kept from before)`}. ✓ means you
+                changed the move or added the engine’s move.
               </div>
             )}
             {issues.length === 0 && <div className="empty">All moves within the margin. 👍</div>}
@@ -347,6 +409,24 @@ export function AuditView() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Under a check's button: whether its saved results still describe the repertoire. */
+function StaleNote({ stale, fresh, how }: { stale: string | null; fresh: string; how: string }) {
+  if (!stale)
+    return (
+      <div className="small muted row" style={{ gap: 6 }}>
+        <span className="status-mark done">
+          <Icon name="check" size={14} />
+        </span>
+        {fresh}
+      </div>
+    );
+  return (
+    <div className="notice small stale-note">
+      <b>{stale}</b> <span className="muted">{how}</span>
     </div>
   );
 }

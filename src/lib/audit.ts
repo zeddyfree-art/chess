@@ -2,7 +2,7 @@
 // move quality (engine).
 import { keyToFen, playSan, type Side } from './chess';
 import { evaluate, scoreCp, type Evaluation } from './evaluate';
-import { AuthRequiredError, fetchExplorer, totalGames, type ExplorerResult } from './lichess';
+import { AuthRequiredError, explorerCacheKey, fetchExplorer, peekCache, totalGames, warmCache, type ExplorerResult } from './lichess';
 import { buildTree, edgeId, isMine, movesAt, ROOT, type EngineFlag, type Repertoire, type TreeNode } from './repertoire';
 
 export interface LineRef {
@@ -36,6 +36,8 @@ export interface GapReport {
   /** Share of games that stays inside prepared territory (until your lines end). */
   coverage: number;
   positions: number;
+  /** Positions that had to be asked from Lichess; the others came from this device's cache (absent in older results). */
+  lookups?: number;
   errors: string[];
 }
 
@@ -55,18 +57,32 @@ type Explore = (key: string) => Promise<ExplorerResult>;
 export async function findGaps(
   rep: Repertoire,
   opts: GapOptions,
-  onProgress: (done: number, current: string[]) => void,
+  onProgress: (done: number, current: string[], lookups: number) => void,
   signal: AbortSignal,
   explorer?: Explore,
 ): Promise<GapReport> {
-  const report: GapReport = { gaps: [], lineEnds: [], coverage: 1, positions: 0, errors: [] };
+  const report: GapReport = { gaps: [], lineEnds: [], coverage: 1, positions: 0, lookups: 0, errors: [] };
+  const query = (key: string) => ({ db: 'lichess' as const, fen: keyToFen(key), ratings: opts.ratings, speeds: opts.speeds });
+  if (!explorer) {
+    // Everything this device asked Lichess before (in the last 30 days) comes from the cache in one go, so a new search
+    // only waits for positions it has not seen. The walk itself always covers the whole repertoire.
+    const keys = new Set<string>();
+    for (const [key, moves] of Object.entries(rep.positions)) {
+      if (!isMine(rep, key)) keys.add(key);
+      else for (const m of moves) keys.add(m.to);
+    }
+    await warmCache([...keys].map((k) => explorerCacheKey(query(k))));
+  }
   let uncovered = 0;
   const gaps = new Map<string, Gap & { best: number }>();
   const ends = new Map<string, LineEnd & { best: number }>();
 
   const explore = async (key: string): Promise<ExplorerResult | null> => {
     try {
-      return await (explorer ?? ((k: string) => fetchExplorer({ db: 'lichess', fen: keyToFen(k), ratings: opts.ratings, speeds: opts.speeds })))(key);
+      if (explorer) return await explorer(key);
+      const q = query(key);
+      if (peekCache(explorerCacheKey(q)) === undefined) report.lookups!++;
+      return await fetchExplorer(q);
     } catch (e) {
       if (e instanceof AuthRequiredError) throw e;
       report.errors.push((e as Error).message);
@@ -107,7 +123,7 @@ export async function findGaps(
         continue;
       }
 
-      onProgress(++report.positions, line);
+      onProgress(++report.positions, line, report.lookups!);
       const stats = await explore(key);
       if (!stats) continue;
       const total = totalGames(stats);
@@ -176,13 +192,17 @@ function lineScore(evaluation: Evaluation, index = 0) {
   return l ? scoreCp(l) : 0;
 }
 
-/** Evaluates every one of your moves; returns the flags to store and the issues above the threshold. */
+/** Evaluates every one of your moves; returns the flags to store and the issues above the threshold.
+ *  `known`: earlier evaluations (the repertoire's engine flags). A move's evaluation depends only on its position and the
+ *  move, not on the rest of the repertoire, so one made at least as deep as asked is reused as is; the result is the
+ *  same as evaluating everything again, only the new or deeper evaluations take time. */
 export async function engineCheck(
   rep: Repertoire,
   opts: EngineOptions,
   onProgress: (done: number, total: number, line: string[]) => void,
   signal: AbortSignal,
-): Promise<{ flags: Record<string, EngineFlag>; issues: EngineIssue[] }> {
+  known?: Record<string, EngineFlag>,
+): Promise<{ flags: Record<string, EngineFlag>; issues: EngineIssue[]; evaluated: number; reused: number }> {
   const items: { node: TreeNode; line: string[] }[] = [];
   const walk = (nodes: TreeNode[], line: string[]) => {
     for (const n of nodes) {
@@ -197,8 +217,18 @@ export async function engineCheck(
   const flags: Record<string, EngineFlag> = {};
   const issues: EngineIssue[] = [];
   let done = 0;
+  let reused = 0;
   for (const { node, line } of items) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    const id = edgeId(node.from, node.uci);
+    const prev = known?.[id];
+    if (prev && prev.depth >= opts.localDepth) {
+      flags[id] = prev;
+      if (prev.loss >= opts.threshold) issues.push({ key: node.from, line, id: node.id, san: node.san, flag: prev });
+      reused++;
+      done++;
+      continue;
+    }
     onProgress(done, items.length, [...line, node.san]);
     const before = await evaluate(node.from, { multiPv: 3, localDepth: opts.localDepth });
     const best = before.lines[0];
@@ -230,7 +260,7 @@ export async function engineCheck(
   }
   onProgress(done, items.length, []);
   issues.sort((a, b) => b.flag.loss - a.flag.loss);
-  return { flags, issues };
+  return { flags, issues, evaluated: items.length - reused, reused };
 }
 
 export function lossLabel(loss: number): { symbol: string; tone: 'ok' | 'dubious' | 'mistake' | 'blunder' } {

@@ -6,6 +6,7 @@ import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { playSan, type PlayedMove, type Side } from './chess';
 import { findMove, findPath, newRepertoire, onlyCardsChanged, ROOT, type Repertoire } from './repertoire';
 import { addCards, type MistakeCard } from './mistakes';
+import type { CheckResults } from './checkResults';
 import { gradeCard, syncCards } from './srs';
 import type { Grade } from 'ts-fsrs';
 
@@ -39,6 +40,8 @@ export interface AppData {
   deleted?: Record<string, number>;
   /** Training cards made from mistakes in your own games (all players). Absent in older data. */
   mistakes?: MistakeCard[];
+  /** The last gap search and engine check per repertoire id, so every device can work through them. */
+  checks?: Record<string, CheckResults>;
 }
 
 export interface CheckTour {
@@ -121,6 +124,8 @@ export interface AppState {
   setTrainDeck(deck: 'repertoire' | 'mistakes'): void;
   /** Opens item `index` of a check's results on the Build board (null: stop). */
   tourTo(tour: CheckTour | null): void;
+  /** Stores a repertoire's newest check results (not undoable: they describe the repertoire, they are not part of it). */
+  saveChecks(repId: string, patch: CheckResults): void;
   addMistakes(cards: MistakeCard[]): number;
   deleteMistakes(ids: string[]): void;
   restoreMistakes(cards: MistakeCard[]): void;
@@ -365,6 +370,11 @@ export const useApp = create<AppState>()((set, get) => {
     setTrainDeck: (deck) => set({ trainDeck: deck }),
 
     tourTo: (tour) => set({ checkTour: tour }),
+
+    saveChecks: (repId, patch) => {
+      const checks = get().data.checks ?? {};
+      patchData({ checks: { ...checks, [repId]: { ...checks[repId], ...patch } } });
+    },
 
     addMistakes: (cards) => {
       const { data } = get();

@@ -12,6 +12,7 @@
 // - Whole profiles and repertoires deleted on purpose stay deleted (tombstones), unless edited later.
 // - Which profile/repertoire is selected stays a per-device choice.
 import { mergeMistakes } from './mistakes';
+import { mergeChecks } from './checkResults';
 import { garbageCollect, type EngineFlag, type RepMove, type Repertoire, type SrsCard } from './repertoire';
 import { syncCards } from './srs';
 import type { AppData, Profile } from './store';
@@ -181,6 +182,8 @@ export function mergeData(local: AppData, remote: AppData, base?: SyncBase | nul
     (m) => !(deleted[m.id] !== undefined && deleted[m.id] >= m.updatedAt) && profileIds.has(m.profileId),
   );
 
+  const checks = mergeChecks(local.checks, remote.checks, new Set(repertoires.map((r) => r.id)));
+
   return {
     // Fields this version does not know (added by a newer version on another device) are kept, not dropped.
     ...remote,
@@ -189,6 +192,7 @@ export function mergeData(local: AppData, remote: AppData, base?: SyncBase | nul
     profiles,
     repertoires,
     mistakes,
+    checks,
     deleted,
     lastBackupAt: Math.max(local.lastBackupAt ?? 0, remote.lastBackupAt ?? 0) || null,
   };
@@ -206,5 +210,10 @@ export function sameSyncedContent(a: AppData, b: AppData): boolean {
       return w !== undefined && (w === v || JSON.stringify(v) === JSON.stringify(w));
     });
   };
-  return sameItems(a.profiles, b.profiles) && sameItems(a.repertoires, b.repertoires) && sameItems(a.mistakes ?? [], b.mistakes ?? []);
+  return (
+    sameItems(a.profiles, b.profiles) &&
+    sameItems(a.repertoires, b.repertoires) &&
+    sameItems(a.mistakes ?? [], b.mistakes ?? []) &&
+    (a.checks === b.checks || JSON.stringify(a.checks ?? {}) === JSON.stringify(b.checks ?? {}))
+  );
 }

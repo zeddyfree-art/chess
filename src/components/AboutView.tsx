@@ -51,8 +51,10 @@ export function AboutView({ standalone = false }: { standalone?: boolean }) {
           <dd>Every branch at a glance. Red dashed boxes are replies people play that you haven’t prepared.</dd>
           <dt>Check</dt>
           <dd>
-            Lists the gaps by how often you will meet them, and flags your moves the engine dislikes. The results stay until you
-            check again: go through them one by one from the board, each ticked off as soon as your repertoire deals with it.
+            Lists the gaps by how often you will meet them, and flags your moves the engine dislikes. The results stay (on all
+            your devices) until you check again: go through them one by one from the board, each ticked off as soon as your
+            repertoire deals with it. It tells you when the repertoire changed since, and checking again only redoes the new
+            parts.
           </dd>
           <dt>Train</dt>
           <dd>Spaced repetition: every move you play is a card that comes back just before you would forget it.</dd>

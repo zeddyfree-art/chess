@@ -123,8 +123,10 @@ const GAMES_DELAY = 20_000;
 
 /** What changed between two versions of the data: nothing that syncs, only training progress, or an edit. */
 export function classify(a: AppData, b: AppData): 'none' | 'training' | 'edit' {
-  if (a.profiles === b.profiles && a.repertoires === b.repertoires && a.deleted === b.deleted && a.mistakes === b.mistakes) return 'none';
-  if (a.profiles !== b.profiles || a.deleted !== b.deleted || a.repertoires.length !== b.repertoires.length) return 'edit';
+  if (a.profiles === b.profiles && a.repertoires === b.repertoires && a.deleted === b.deleted && a.mistakes === b.mistakes && a.checks === b.checks)
+    return 'none';
+  // New check results go up soon too: you may pick up the list on another device.
+  if (a.profiles !== b.profiles || a.deleted !== b.deleted || a.checks !== b.checks || a.repertoires.length !== b.repertoires.length) return 'edit';
   let training = false;
   if (a.mistakes !== b.mistakes) {
     const x = a.mistakes ?? [];

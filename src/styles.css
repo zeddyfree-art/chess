@@ -1194,6 +1194,10 @@ main {
   color: var(--due);
 }
 
+.stale-note b {
+  font-weight: 600;
+}
+
 /* Going through the results of a check on the Build board */
 .tour-bar {
   display: flex;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { lineFromSans, START_KEY } from './chess';
-import { engineStatus, gapStatus, lineEndStatus } from './checkResults';
+import { engineChanged, engineStatus, gapFilters, gapsChanged, gapStatus, lineEndStatus, mergeChecks, savedEngine, savedGaps } from './checkResults';
+import { mergeData } from './merge';
+import type { AppData } from './store';
 import { addLine, deleteMove, newRepertoire } from './repertoire';
 
 const key = (sans: string[]) => (sans.length ? lineFromSans(sans)!.at(-1)!.to : START_KEY);
@@ -32,5 +34,57 @@ describe('what has been done since a check', () => {
     expect(engineStatus(deleteMove(base, at, ba6.uci), issue, 50)).toMatchObject({ state: 'done', note: 'move changed' });
     const rechecked = { ...base, engine: { [id]: { ...issue.flag, loss: 20, at: 2000 } } };
     expect(engineStatus(rechecked, issue, 50).state).toBe('done');
+  });
+});
+
+describe('check results between devices', () => {
+  const report = (n: number) => ({ gaps: [], lineEnds: [], coverage: n, positions: 1, errors: [] });
+  const g = (at: number) => ({ report: report(at), at, minReach: 0.02 });
+  const e = (at: number) => ({ issues: [], at, threshold: 50 });
+
+  it('keeps the newest search and the newest engine check per repertoire, and drops gone repertoires', () => {
+    const local = { a: { gaps: g(5), engine: e(1) }, gone: { gaps: g(9) } };
+    const remote = { a: { gaps: g(3), engine: e(7) }, b: { engine: e(2) } };
+    const m = mergeChecks(local, remote, new Set(['a', 'b']));
+    expect(m.a.gaps!.at).toBe(5);
+    expect(m.a.engine!.at).toBe(7);
+    expect(m.b.engine!.at).toBe(2);
+    expect(m.gone).toBeUndefined();
+  });
+
+  it('returns the same object when nothing changes (so it does not count as an edit)', () => {
+    const local = { a: { gaps: g(5) } };
+    expect(mergeChecks(local, { a: { gaps: g(3) } }, new Set(['a']))).toBe(local);
+  });
+
+  it('travels with the data when two devices are merged', () => {
+    const rep = newRepertoire('p', 'e4', 'white');
+    const profile = { id: 'p', name: 'F', ratings: [], speeds: [], updatedAt: 1 } as unknown as AppData['profiles'][number];
+    const base: AppData = { version: 1, profiles: [profile], repertoires: [rep], activeProfileId: 'p', activeRepId: rep.id, lastBackupAt: null };
+    const phone = { ...base, checks: { [rep.id]: { gaps: g(10) } } };
+    const desktop = { ...base, checks: { [rep.id]: { engine: e(20) } } };
+    const merged = mergeData(desktop, phone);
+    expect(merged.checks![rep.id]).toMatchObject({ gaps: { at: 10 }, engine: { at: 20 } });
+  });
+});
+
+describe('changed since the check', () => {
+  const rep = withLine(newRepertoire('p', 'e4', 'white'), ['e4', 'e5', 'Nf3']);
+  const filters = gapFilters({ ratings: [1600], speeds: ['blitz'], maxPly: 20 });
+  const report = { gaps: [], lineEnds: [], coverage: 1, positions: 1, errors: [] };
+
+  it('notices new moves, but not comments or training', () => {
+    const saved = savedGaps(rep, report, 0.02, filters);
+    expect(gapsChanged(rep, saved, filters)).toBeNull();
+    expect(gapsChanged({ ...rep, notes: { x: 'a note' }, cards: {} }, saved, filters)).toBeNull();
+    expect(gapsChanged(withLine(rep, ['e4', 'c5']), saved, filters)).toBe('repertoire');
+    expect(gapsChanged(rep, saved, gapFilters({ ratings: [1800], speeds: ['blitz'], maxPly: 20 }))).toBe('filters');
+    expect(gapsChanged(rep, { ...saved, repHash: undefined }, filters)).toBe('unknown');
+  });
+
+  it('the engine check only cares about your own moves', () => {
+    const saved = savedEngine(rep, [], 50, 16);
+    expect(engineChanged(withLine(rep, ['e4', 'c5']), saved)).toBeNull(); // only an opponent move
+    expect(engineChanged(withLine(rep, ['e4', 'c5', 'Nf3']), saved)).toBe('repertoire');
   });
 });
