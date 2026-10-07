@@ -1163,6 +1163,52 @@ main {
   color: var(--text);
 }
 
+.result-item.done > :not(.status-mark) {
+  opacity: 0.5;
+}
+
+.result-item.done .badge.gap {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.status-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.status-mark.done {
+  background: var(--mine-soft);
+  color: var(--mine);
+}
+
+.status-mark.partial {
+  background: var(--due-soft);
+  color: var(--due);
+}
+
+/* Going through the results of a check on the Build board */
+.tour-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-left: 3px solid var(--accent);
+}
+
+.tour-item {
+  gap: 6px;
+  min-width: 0;
+}
+
 .coverage-ring {
   display: flex;
   align-items: baseline;

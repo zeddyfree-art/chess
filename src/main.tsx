@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { pruneCheckResults } from './lib/checkResults';
 import { completeLoginIfRedirected } from './lib/lichess';
 import { loadGames } from './lib/gamesStore';
 import { loadData, useApp } from './lib/store';
@@ -24,6 +25,7 @@ addEventListener('unhandledrejection', (e) => {
 });
 
 Promise.all([loadData(), loadGames()]).then(() => {
+  void pruneCheckResults(useApp.getState().data.repertoires.map((r) => r.id)).catch(() => {});
   initSync();
   initUpdateCheck();
   completeLoginIfRedirected()

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatLine } from '../lib/chess';
-import { engineCheck, findGaps, lossLabel, type EngineIssue, type GapReport } from '../lib/audit';
+import { engineCheck, findGaps, lossLabel } from '../lib/audit';
+import { loadCheckResults, saveCheckResults, useCheckResults } from '../lib/checkResults';
+import { StatusMark, tourItems, type TourItem } from './CheckTour';
+import type { CheckTour } from '../lib/store';
 import { AuthRequiredError, getToken, startLogin } from '../lib/lichess';
 import { activeProfile, activeRep, useApp } from '../lib/store';
 import { formatPct } from './ExplorerPanel';
@@ -24,12 +27,24 @@ export function AuditView() {
       return next;
     });
   const [gapRun, setGapRun] = useState<{ done: number; line: string[] } | null>(null);
-  const [gaps, setGaps] = useState<GapReport | null>(null);
   const [gapError, setGapError] = useState<Error | null>(null);
+  // The last results stay (on this device) until you run the check again: work through them one by one.
+  const saved = useCheckResults((s) => s.byRep[rep.id]);
+  useEffect(() => loadCheckResults(rep.id), [rep.id]);
+  const gaps = saved?.gaps?.report ?? null;
+  const issues = saved?.engine?.issues ?? null;
+  const [hideDone, setHideDone] = useState(() => localStorage.getItem('check-hide-done') === '1');
+  const toggleHideDone = (v: boolean) => {
+    setHideDone(v);
+    try {
+      localStorage.setItem('check-hide-done', v ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
 
   const [engOpts, setEngOpts] = useState({ threshold: 50, maxPly: 24, localDepth: 16 });
   const [engRun, setEngRun] = useState<{ done: number; total: number; line: string[] } | null>(null);
-  const [issues, setIssues] = useState<EngineIssue[] | null>(null);
   const [engError, setEngError] = useState<Error | null>(null);
 
   const abort = useRef<AbortController | null>(null);
@@ -49,7 +64,7 @@ export function AuditView() {
         (done, line) => setGapRun({ done, line }),
         ctrl.signal,
       );
-      setGaps(report);
+      saveCheckResults(rep.id, { gaps: { report, at: Date.now(), minReach: gapOpts.minReach } });
     } catch (e) {
       if ((e as Error).name !== 'AbortError') setGapError(e as Error);
     } finally {
@@ -66,7 +81,7 @@ export function AuditView() {
     try {
       const { flags, issues } = await engineCheck(rep, engOpts, (done, total, line) => setEngRun({ done, total, line }), ctrl.signal);
       updateRep(rep.id, (r) => ({ ...r, engine: { ...r.engine, ...flags } }), 'engine check', { undoable: false });
-      setIssues(issues);
+      saveCheckResults(rep.id, { engine: { issues, at: Date.now(), threshold: engOpts.threshold } });
     } catch (e) {
       if ((e as Error).name !== 'AbortError') setEngError(e as Error);
     } finally {
@@ -75,6 +90,23 @@ export function AuditView() {
   };
 
   const stop = () => abort.current?.abort();
+
+  const tourTo = useApp((s) => s.tourTo);
+  /** Opens an item on the build board and remembers the list, so Build can go on to the next one. */
+  const open = (kind: CheckTour['kind'], items: TourItem[], item: TourItem) => {
+    const ids = items.map((x) => x.id);
+    tourTo({ repId: rep.id, kind, ids, index: ids.indexOf(item.id) });
+    goToSans(item.line);
+  };
+  const gapItems = tourItems(rep, saved, 'gaps');
+  const endItems = tourItems(rep, saved, 'ends');
+  const engineItems = tourItems(rep, saved, 'engine');
+  // A reply you added since the check moves its games inside your preparation (at least until that line ends).
+  const coverage = gaps
+    ? Math.min(1, gaps.coverage + gaps.gaps.reduce((a, g, i) => a + (gapItems[i]?.status.state !== 'open' ? g.reach : 0), 0))
+    : 0;
+  const doneCount = (items: TourItem[]) => items.filter((x) => x.status.state === 'done').length;
+  const visible = (items: TourItem[]) => (hideDone ? items.filter((x) => x.status.state !== 'done') : items);
 
   // Engine flags saved from an earlier run, so results survive a reload.
   const storedIssues = Object.values(rep.engine).filter((f) => f.loss >= engOpts.threshold).length;
@@ -118,8 +150,8 @@ export function AuditView() {
                 </span>
               </>
             ) : (
-              <button className="btn primary" onClick={runGaps}>
-                Find gaps
+              <button className={`btn ${gaps ? '' : 'primary'}`} onClick={runGaps}>
+                {gaps ? 'Find gaps again' : 'Find gaps'}
               </button>
             )}
           </div>
@@ -146,43 +178,73 @@ export function AuditView() {
           <>
             <div className="section">
               <div className="coverage-ring">
-                <span className="big-count">{Math.round(gaps.coverage * 100)}%</span>
+                <span className="big-count">{Math.round(coverage * 100)}%</span>
                 <span className="muted">
                   of your games stay inside your preparation until your lines end · {gaps.positions} positions checked
+                  {coverage > gaps.coverage && ` · ${Math.round(gaps.coverage * 100)}% at the check, the rest is what you added since`}
                 </span>
               </div>
               <div className="progress" style={{ marginTop: 8 }}>
-                <div style={{ width: `${gaps.coverage * 100}%`, background: 'var(--mine)' }} />
+                <div style={{ width: `${coverage * 100}%`, background: 'var(--mine)' }} />
               </div>
             </div>
             <div className="section">
-              <h3 style={{ marginBottom: 6 }}>Missing replies ({gaps.gaps.length})</h3>
+              <div className="row wrap" style={{ marginBottom: 6 }}>
+                <h3>
+                  Missing replies ({gaps.gaps.length}
+                  {doneCount(gapItems) ? ` · ${doneCount(gapItems)} done` : ''})
+                </h3>
+                <span className="spacer" />
+                <label className="row small muted" style={{ gap: 4, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={hideDone} onChange={(e) => toggleHideDone(e.target.checked)} /> hide done
+                </label>
+              </div>
+              {saved?.gaps && (
+                <div className="small faint" style={{ marginBottom: 6 }}>
+                  Found {timeAgo(saved.gaps.at)}, from {formatPct(saved.gaps.minReach)} of your games. Click one to open it on the board; the
+                  board then takes you to the next. ✓ means your repertoire now has the reply and your answer.
+                </div>
+              )}
               {gaps.gaps.length === 0 && <div className="empty">No gaps above the threshold. Nice!</div>}
               <div className="result-list">
-                {gaps.gaps.map((g, i) => (
-                  <div key={i} className="result-item" onClick={() => goToSans(g.line)} title="Open this position to add a reply">
-                    <span className="badge gap num">{formatPct(g.reach)}</span>
-                    <LineWithLast line={g.line} last={g.san} />
-                    <span className="faint small num">{formatPct(g.share)} here</span>
-                  </div>
-                ))}
+                {visible(gapItems).map((it) => {
+                  const g = gaps.gaps.find((x) => `${x.key}|${x.san}` === it.id)!;
+                  return (
+                    <div key={it.id} className={`result-item ${it.status.state}`} onClick={() => open('gaps', visible(gapItems), it)} title="Open this position to add a reply">
+                      <span className="badge gap num">{formatPct(g.reach)}</span>
+                      <LineWithLast line={g.line} last={g.san} />
+                      <span className="faint small num">
+                        {formatPct(g.share)} here{g.routes > 1 ? ` · ${g.routes} move orders` : ''}
+                      </span>
+                      <StatusMark status={it.status} />
+                    </div>
+                  );
+                })}
               </div>
             </div>
             {gaps.lineEnds.length > 0 && (
               <div className="section">
-                <h3 style={{ marginBottom: 6 }}>Lines that end early</h3>
+                <h3 style={{ marginBottom: 6 }}>
+                  Lines that end early{doneCount(endItems) ? ` (${doneCount(endItems)} extended)` : ''}
+                </h3>
                 <div className="help" style={{ marginBottom: 6 }}>
                   Your preparation stops here while many games continue. Not a problem, but you may want to go further.
                 </div>
                 <div className="result-list">
-                  {gaps.lineEnds.slice(0, 15).map((g, i) => (
-                    <div key={i} className="result-item" onClick={() => goToSans(g.line)}>
-                      <span className="badge num">{formatPct(g.reach)}</span>
-                      <span className="result-line">
-                        {formatLine(g.line)} → {g.topMoves.map((m) => `${m.san} ${formatPct(m.share)}`).join(', ')}
-                      </span>
-                    </div>
-                  ))}
+                  {visible(endItems)
+                    .slice(0, 15)
+                    .map((it) => {
+                      const g = gaps.lineEnds.find((x) => x.key === it.id)!;
+                      return (
+                        <div key={it.id} className={`result-item ${it.status.state}`} onClick={() => open('ends', visible(endItems).slice(0, 15), it)}>
+                          <span className="badge num">{formatPct(g.reach)}</span>
+                          <span className="result-line">
+                            {formatLine(g.line)} → {g.topMoves.map((m) => `${m.san} ${formatPct(m.share)}`).join(', ')}
+                          </span>
+                          <StatusMark status={it.status} />
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -229,8 +291,8 @@ export function AuditView() {
                 </span>
               </>
             ) : (
-              <button className="btn primary" onClick={runEngine}>
-                Check my moves
+              <button className={`btn ${issues ? '' : 'primary'}`} onClick={runEngine}>
+                {issues ? 'Check again' : 'Check my moves'}
               </button>
             )}
           </div>
@@ -249,18 +311,35 @@ export function AuditView() {
         </div>
         {issues && (
           <div className="section">
-            <h3 style={{ marginBottom: 6 }}>Dubious moves ({issues.length})</h3>
+            <div className="row wrap" style={{ marginBottom: 6 }}>
+              <h3>
+                Dubious moves ({issues.length}
+                {doneCount(engineItems) ? ` · ${doneCount(engineItems)} done` : ''})
+              </h3>
+              <span className="spacer" />
+              <label className="row small muted" style={{ gap: 4, cursor: 'pointer' }}>
+                <input type="checkbox" checked={hideDone} onChange={(e) => toggleHideDone(e.target.checked)} /> hide done
+              </label>
+            </div>
+            {saved?.engine && (
+              <div className="small faint" style={{ marginBottom: 6 }}>
+                Checked {timeAgo(saved.engine.at)}, from {(saved.engine.threshold / 100).toFixed(1)} pawn. ✓ means you changed the move or
+                added the engine’s move.
+              </div>
+            )}
             {issues.length === 0 && <div className="empty">All moves within the margin. 👍</div>}
             <div className="result-list">
-              {issues.map((it) => {
+              {visible(engineItems).map((item) => {
+                const it = issues.find((x) => x.id === item.id)!;
                 const l = lossLabel(it.flag.loss);
                 return (
-                  <div key={it.id} className="result-item" onClick={() => goToSans(it.line)}>
+                  <div key={it.id} className={`result-item ${item.status.state}`} onClick={() => open('engine', visible(engineItems), item)}>
                     <span className="badge gap num">−{(it.flag.loss / 100).toFixed(1)}</span>
                     <LineWithLast line={it.line} last={it.san} suffix={l.symbol} />
                     <span className="small">
                       better: <b>{it.flag.bestSan}</b>
                     </span>
+                    <StatusMark status={item.status} />
                   </div>
                 );
               })}
@@ -270,6 +349,15 @@ export function AuditView() {
       </div>
     </div>
   );
+}
+
+function timeAgo(t: number): string {
+  const min = (Date.now() - t) / 60000;
+  if (min < 1) return 'just now';
+  if (min < 60) return `${Math.round(min)} min ago`;
+  if (min < 1440) return `${Math.round(min / 60)} h ago`;
+  const d = Math.round(min / 1440);
+  return d === 1 ? 'yesterday' : `${d} days ago`;
 }
 
 /** "1. e4 e5 2. Nf3 **Nc6**" – the whole line with the move in question in bold. */

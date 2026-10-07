@@ -31,6 +31,7 @@ import { ChoiceDialog, type Choice } from './Dialog';
 import { EnginePanel, EvalBar } from './EnginePanel';
 import { ExplorerPanel } from './ExplorerPanel';
 import { Icon } from './Icon';
+import { CheckTourBar } from './CheckTour';
 import { ImportPgnDialog } from './ImportPgnDialog';
 
 type Tab = 'lichess' | 'masters' | 'engine';
@@ -303,12 +304,13 @@ export function BuildView() {
       </div>
 
       <div className="side-panel">
+        <CheckTourBar rep={rep} />
         <div className="card">
           <div className="section pos-head">
             <span className="opening-name">{opening ?? (ply === 0 ? 'Starting position' : ' ')}</span>
             <span className="spacer" />
             <span className={`badge ${mine ? 'mine' : 'opp'}`}>{mine ? 'Your move' : 'Opponent to move'}</span>
-            <div className="row" style={{ flexBasis: '100%', gap: 6 }}>
+            <div className="row wrap" style={{ flexBasis: '100%', gap: 6 }}>
               <button
                 className="btn sm"
                 disabled={!inRepertoire}

@@ -41,6 +41,14 @@ export interface AppData {
   mistakes?: MistakeCard[];
 }
 
+export interface CheckTour {
+  repId: string;
+  kind: 'gaps' | 'ends' | 'engine';
+  /** The items' ids in the saved results, in order. */
+  ids: string[];
+  index: number;
+}
+
 export type View = 'home' | 'build' | 'tree' | 'train' | 'play' | 'audit' | 'games' | 'settings' | 'about';
 
 export interface Toast {
@@ -75,6 +83,8 @@ export interface AppState {
   openGameId: string | null;
   /** Which deck the Train tab shows. */
   trainDeck: 'repertoire' | 'mistakes';
+  /** Going through the results of a check one by one, from the Build board. */
+  checkTour: CheckTour | null;
   undo: UndoEntry[];
   redo: UndoEntry[];
   toast: Toast | null;
@@ -109,6 +119,8 @@ export interface AppState {
   playFrom(line: PlayedMove[], setup?: { color?: Side; label?: string; level?: number }): void;
   openGame(id: string | null): void;
   setTrainDeck(deck: 'repertoire' | 'mistakes'): void;
+  /** Opens item `index` of a check's results on the Build board (null: stop). */
+  tourTo(tour: CheckTour | null): void;
   addMistakes(cards: MistakeCard[]): number;
   deleteMistakes(ids: string[]): void;
   restoreMistakes(cards: MistakeCard[]): void;
@@ -166,6 +178,7 @@ export const useApp = create<AppState>()((set, get) => {
     playSetup: null,
     openGameId: null,
     trainDeck: 'repertoire',
+    checkTour: null,
     undo: [],
     redo: [],
     toast: null,
@@ -350,6 +363,8 @@ export const useApp = create<AppState>()((set, get) => {
     openGame: (id) => set({ openGameId: id, view: 'games' }),
 
     setTrainDeck: (deck) => set({ trainDeck: deck }),
+
+    tourTo: (tour) => set({ checkTour: tour }),
 
     addMistakes: (cards) => {
       const { data } = get();

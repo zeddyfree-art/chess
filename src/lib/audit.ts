@@ -16,15 +16,18 @@ export interface Gap extends LineRef {
   san: string;
   /** Share of games at this position in which the opponent plays this move. */
   share: number;
-  /** Estimated share of *all* your games (with this colour) that reach this gap. */
+  /** Estimated share of *all* your games (with this colour) that reach this gap, over every move order. */
   reach: number;
   games: number;
+  /** Number of move orders (within your repertoire) that lead to this position. */
+  routes: number;
 }
 
 export interface LineEnd extends LineRef {
   reach: number;
   games: number;
   topMoves: { san: string; share: number }[];
+  routes: number;
 }
 
 export interface GapReport {
@@ -44,19 +47,26 @@ export interface GapOptions {
   maxPly: number;
 }
 
+type Explore = (key: string) => Promise<ExplorerResult>;
+
+/** Walks the repertoire against the database, half-move by half-move. A position you can reach by several move
+ *  orders (1.d4 Nf6 2.c4 e6 and 1.d4 e6 2.c4 Nf6) is looked at once, with the shares of all routes added up, so
+ *  the percentages are of all your games, whichever way they got there. */
 export async function findGaps(
   rep: Repertoire,
   opts: GapOptions,
   onProgress: (done: number, current: string[]) => void,
   signal: AbortSignal,
+  explorer?: Explore,
 ): Promise<GapReport> {
   const report: GapReport = { gaps: [], lineEnds: [], coverage: 1, positions: 0, errors: [] };
   let uncovered = 0;
-  const expanded = new Set<string>();
+  const gaps = new Map<string, Gap & { best: number }>();
+  const ends = new Map<string, LineEnd & { best: number }>();
 
   const explore = async (key: string): Promise<ExplorerResult | null> => {
     try {
-      return await fetchExplorer({ db: 'lichess', fen: keyToFen(key), ratings: opts.ratings, speeds: opts.speeds });
+      return await (explorer ?? ((k: string) => fetchExplorer({ db: 'lichess', fen: keyToFen(k), ratings: opts.ratings, speeds: opts.speeds })))(key);
     } catch (e) {
       if (e instanceof AuthRequiredError) throw e;
       report.errors.push((e as Error).message);
@@ -64,54 +74,85 @@ export async function findGaps(
     }
   };
 
-  const visit = async (key: string, reach: number, line: string[]) => {
-    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    if (expanded.has(key) || line.length >= opts.maxPly || reach < opts.minReach) return;
-    expanded.add(key);
-    const prepared = movesAt(rep, key);
-
-    if (isMine(rep, key)) {
-      for (const m of prepared) await visit(m.to, reach, [...line, m.san]);
-      return;
-    }
-
-    onProgress(++report.positions, line);
-    const stats = await explore(key);
-    if (!stats) return;
-    const total = totalGames(stats);
-    if (!total) return;
-
-    if (!prepared.length) {
-      if (line.length) {
-        report.lineEnds.push({
-          key,
-          line,
-          reach,
-          games: total,
-          topMoves: stats.moves.slice(0, 3).map((m) => ({ san: m.san, share: totalGames(m) / total })),
-        });
-      }
-      return;
-    }
-
-    for (const em of stats.moves) {
-      const share = totalGames(em) / total;
-      const repMove = prepared.find((m) => m.san === em.san);
-      if (repMove) {
-        await visit(repMove.to, reach * share, [...line, repMove.san]);
-      } else {
-        uncovered += reach * share;
-        if (reach * share >= opts.minReach) {
-          report.gaps.push({ key, line, san: em.san, share, reach: reach * share, games: totalGames(em) });
-        }
+  // Positions waiting per half-move: reach summed over the routes that arrive there, and the line of the likeliest one.
+  type Entry = { reach: number; line: string[]; best: number; routes: number };
+  const levels = new Map<number, Map<string, Entry>>();
+  const arrive = (ply: number, key: string, reach: number, line: string[], routes = 1) => {
+    let level = levels.get(ply);
+    if (!level) levels.set(ply, (level = new Map()));
+    const e = level.get(key);
+    if (!e) level.set(key, { reach, line, best: reach, routes });
+    else {
+      e.reach += reach;
+      e.routes += routes;
+      if (reach > e.best) {
+        e.best = reach;
+        e.line = line;
       }
     }
   };
+  arrive(0, ROOT, 1, []);
 
-  await visit(ROOT, 1, []);
+  for (let ply = 0; ply <= opts.maxPly && [...levels.keys()].some((p) => p >= ply); ply++) {
+    const level = levels.get(ply);
+    if (!level) continue;
+    levels.delete(ply);
+    for (const [key, { reach, line, routes }] of [...level].sort((a, b) => b[1].reach - a[1].reach)) {
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (ply >= opts.maxPly || reach < opts.minReach) continue;
+      const prepared = movesAt(rep, key);
+
+      if (isMine(rep, key)) {
+        for (const m of prepared) arrive(ply + 1, m.to, reach, [...line, m.san], routes);
+        continue;
+      }
+
+      onProgress(++report.positions, line);
+      const stats = await explore(key);
+      if (!stats) continue;
+      const total = totalGames(stats);
+      if (!total) continue;
+
+      if (!prepared.length) {
+        if (line.length) {
+          const prev = ends.get(key);
+          if (prev) {
+            prev.reach += reach;
+            prev.routes += routes;
+          } else
+            ends.set(key, {
+              key,
+              line,
+              reach,
+              best: reach,
+              routes,
+              games: total,
+              topMoves: stats.moves.slice(0, 3).map((m) => ({ san: m.san, share: totalGames(m) / total })),
+            });
+        }
+        continue;
+      }
+
+      for (const em of stats.moves) {
+        const share = totalGames(em) / total;
+        const repMove = prepared.find((m) => m.san === em.san);
+        if (repMove) arrive(ply + 1, repMove.to, reach * share, [...line, repMove.san], routes);
+        else {
+          uncovered += reach * share;
+          const id = `${key}|${em.san}`;
+          const g = gaps.get(id);
+          if (g) {
+            g.reach += reach * share;
+            g.routes += routes;
+          } else gaps.set(id, { key, line, san: em.san, share, reach: reach * share, best: reach, games: totalGames(em), routes });
+        }
+      }
+    }
+  }
+
   report.coverage = Math.max(0, 1 - uncovered);
-  report.gaps.sort((a, b) => b.reach - a.reach);
-  report.lineEnds.sort((a, b) => b.reach - a.reach);
+  report.gaps = [...gaps.values()].filter((g) => g.reach >= opts.minReach).map(({ best: _b, ...g }) => g).sort((a, b) => b.reach - a.reach);
+  report.lineEnds = [...ends.values()].map(({ best: _b, ...e }) => e).sort((a, b) => b.reach - a.reach);
   return report;
 }
 
