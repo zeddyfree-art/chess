@@ -24,7 +24,13 @@ export interface SrsCard {
   lapses: number;
   state: number;
   last_review?: number;
+  /** Set when the card is changed other than by a review (a reset, or an undo of one), so that change wins when two
+   *  devices are merged; otherwise the later review wins. */
+  changedAt?: number;
 }
+
+/** When a card last changed, for merging two devices' copies. */
+export const cardTime = (c: SrsCard) => Math.max(c.changedAt ?? 0, c.last_review ?? 0);
 
 export interface EngineFlag {
   /** Centipawns lost versus the engine's best move, from the repertoire side's view. */
@@ -52,6 +58,8 @@ export interface Repertoire {
   /** Train only your moves up to this move number (1 = your first move), to learn a wide repertoire breadth-first.
    *  Deeper cards keep their schedule and come back when you raise it. Absent: every move. */
   trainDepth?: number;
+  /** Training paused: no reviews, not counted as due, until resumed. The cards keep their schedule. */
+  paused?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -140,8 +148,14 @@ export function onlyCardsChanged(a: Repertoire, b: Repertoire): boolean {
     a.side === b.side &&
     a.profileId === b.profileId &&
     !!a.study === !!b.study &&
-    a.trainDepth === b.trainDepth
+    a.trainDepth === b.trainDepth &&
+    !!a.paused === !!b.paused
   );
+}
+
+export function setPaused(rep: Repertoire, paused: boolean): Repertoire {
+  const { paused: _old, ...rest } = rep;
+  return paused ? { ...rest, paused: true, updatedAt: Date.now() } : { ...rest, updatedAt: Date.now() };
 }
 
 export function setTrainDepth(rep: Repertoire, depth: number | undefined): Repertoire {

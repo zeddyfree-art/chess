@@ -283,7 +283,7 @@ export const useApp = create<AppState>()((set, get) => {
       if (!entry) return;
       const current = get().data.repertoires.find((r) => r.id === entry.repId);
       if (!current) return;
-      mapRep(entry.repId, () => ({ ...entry.before, updatedAt: Date.now() }));
+      mapRep(entry.repId, () => restored(entry.before, current));
       set((s) => ({ undo: s.undo.slice(0, -1), redo: [...s.redo, { ...entry, before: current }] }));
       get().showToast(`Undone: ${entry.label}`);
     },
@@ -293,7 +293,7 @@ export const useApp = create<AppState>()((set, get) => {
       if (!entry) return;
       const current = get().data.repertoires.find((r) => r.id === entry.repId);
       if (!current) return;
-      mapRep(entry.repId, () => ({ ...entry.before, updatedAt: Date.now() }));
+      mapRep(entry.repId, () => restored(entry.before, current));
       set((s) => ({ redo: s.redo.slice(0, -1), undo: [...s.undo, { ...entry, before: current }] }));
       get().showToast(`Redone: ${entry.label}`);
     },
@@ -561,6 +561,21 @@ export async function loadData() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') void write();
   });
+}
+
+/** A repertoire brought back by undo or redo. Per card: training done since stays (a review is never undone), while a
+ *  card that was reset comes back as it was, stamped so that the undo also wins over another device's copy. */
+function restored(before: Repertoire, current: Repertoire): Repertoire {
+  const now = Date.now();
+  let cards = before.cards;
+  for (const [id, b] of Object.entries(before.cards)) {
+    const c = current.cards[id];
+    if (!c || c === b) continue;
+    const reviewedSince = (c.last_review ?? 0) > (b.last_review ?? 0) && !((c.changedAt ?? 0) >= (c.last_review ?? 0));
+    if (cards === before.cards) cards = { ...before.cards };
+    cards[id] = reviewedSince ? c : { ...b, changedAt: now };
+  }
+  return { ...before, cards, updatedAt: now };
 }
 
 export function exportBackup(data: AppData): string {

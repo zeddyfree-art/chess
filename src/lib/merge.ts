@@ -8,12 +8,12 @@
 //   changed on both sides the most recent edit wins.
 // - Without a base (first sync of a device, or data from before this existed) nothing is deleted:
 //   both sides' moves are kept.
-// - Training progress is merged per card: whichever side reviewed a card last wins.
+// - Training progress is merged per card: whichever side reviewed a card last wins (or reset it, or undid that).
 // - Whole profiles and repertoires deleted on purpose stay deleted (tombstones), unless edited later.
 // - Which profile/repertoire is selected stays a per-device choice.
 import { mergeMistakes } from './mistakes';
 import { mergeChecks } from './checkResults';
-import { garbageCollect, type EngineFlag, type RepMove, type Repertoire, type SrsCard } from './repertoire';
+import { cardTime, garbageCollect, type EngineFlag, type RepMove, type Repertoire, type SrsCard } from './repertoire';
 import { syncCards } from './srs';
 import type { AppData, Profile } from './store';
 
@@ -51,7 +51,7 @@ const contentKeys = new WeakMap<Repertoire, string>();
 function contentKey(r: Repertoire): string {
   let k = contentKeys.get(r);
   if (k === undefined) {
-    k = JSON.stringify([r.name, r.side, r.profileId, r.positions, r.notes, r.shapes ?? {}, r.engine, !!r.study, r.trainDepth ?? 0]);
+    k = JSON.stringify([r.name, r.side, r.profileId, r.positions, r.notes, r.shapes ?? {}, r.engine, !!r.study, r.trainDepth ?? 0, !!r.paused]);
     contentKeys.set(r, k);
   }
   return k;
@@ -64,7 +64,7 @@ function mergeCards(a: Record<string, SrsCard>, b: Record<string, SrsCard>): Rec
   const out = { ...a };
   for (const [id, card] of Object.entries(b)) {
     const mine = out[id];
-    if (!mine || (card.last_review ?? 0) > (mine.last_review ?? 0)) out[id] = card;
+    if (!mine || cardTime(card) > cardTime(mine)) out[id] = card;
   }
   return out;
 }
@@ -130,6 +130,7 @@ function mergeContent(local: Repertoire, remote: Repertoire, base: Repertoire | 
     side: pick(local.side, remote.side, base?.side, !!base),
     study: pick(!!local.study, !!remote.study, base ? !!base.study : undefined, !!base) || undefined,
     trainDepth: pick(local.trainDepth, remote.trainDepth, base?.trainDepth, !!base),
+    paused: pick(!!local.paused, !!remote.paused, base ? !!base.paused : undefined, !!base) || undefined,
     positions,
     notes: byKey(local.notes, remote.notes, base?.notes),
     shapes: byKey(local.shapes, remote.shapes, base?.shapes),
@@ -144,7 +145,7 @@ function laterReviews(own: Record<string, SrsCard>, other: Record<string, SrsCar
   let out = own;
   for (const [id, card] of Object.entries(own)) {
     const theirs = other[id];
-    if (theirs && (theirs.last_review ?? 0) > (card.last_review ?? 0)) {
+    if (theirs && cardTime(theirs) > cardTime(card)) {
       if (out === own) out = { ...own };
       out[id] = theirs;
     }

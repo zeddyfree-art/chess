@@ -2581,6 +2581,17 @@ a.btn {
   color: var(--muted);
 }
 
+.play-toggle.paused {
+  color: var(--due);
+  background: var(--due-soft);
+  border-color: transparent;
+}
+
+.train-admin {
+  gap: 4px;
+  margin-top: -4px;
+}
+
 .rep-card.study {
   opacity: 0.85;
 }

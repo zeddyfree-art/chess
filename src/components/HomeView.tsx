@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { Side } from '../lib/chess';
 import { downloadText, safeName } from '../lib/download';
 import { exportPgn, importPgn } from '../lib/pgn';
-import { newRepertoire, setStudy, stats, toMoves, type Repertoire } from '../lib/repertoire';
+import { newRepertoire, setPaused, setStudy, stats, toMoves, type Repertoire } from '../lib/repertoire';
 import { counts, State } from '../lib/srs';
 import { activeProfile, orderedReps, useApp } from '../lib/store';
 import { useSync } from '../lib/sync';
@@ -176,9 +176,24 @@ export function HomeView() {
                 <div style={{ fontWeight: 650, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rep.name}>
                   {rep.name}
                 </div>
-                <div className="row small" style={{ gap: 6 }}>
-                  <span className="muted">{rep.side === 'white' ? 'with White' : 'with Black'}</span>
+                <div className="row wrap small" style={{ gap: 4 }}>
+                  <span className="muted" style={{ whiteSpace: 'nowrap', marginRight: 2 }}>
+                    {rep.side === 'white' ? 'with White' : 'with Black'}
+                  </span>
                   <PlayToggle rep={rep} />
+                  {rep.paused && (
+                    <button
+                      className="play-toggle paused"
+                      title="Training paused: no reviews, nothing due. Click to resume."
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        useApp.getState().updateRep(rep.id, (r) => setPaused(r, false), 'resume training', { undoable: false });
+                        useApp.getState().showToast(`Training of “${rep.name}” resumed`);
+                      }}
+                    >
+                      ⏸ Paused
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="row" style={{ gap: 2 }} onClick={(e) => e.stopPropagation()}>

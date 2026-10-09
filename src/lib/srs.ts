@@ -26,6 +26,13 @@ export function newCard(now = Date.now()): SrsCard {
   return toStored(createEmptyCard(new Date(now)));
 }
 
+/** Training progress back to the start: the cards become new (stamped, so this wins over older reviews elsewhere). */
+export function resetCards(rep: Repertoire, ids?: Set<string>, now = Date.now()): Repertoire {
+  const cards: Record<string, SrsCard> = {};
+  for (const [id, c] of Object.entries(rep.cards)) cards[id] = !ids || ids.has(id) ? { ...newCard(now), changedAt: now } : c;
+  return { ...rep, cards };
+}
+
 export function gradeCard(card: SrsCard, grade: Grade, now = Date.now()): SrsCard {
   return toStored(scheduler.next({ ...card, last_review: card.last_review ?? null }, now, grade).card);
 }
@@ -93,7 +100,9 @@ export function counts(rep: Repertoire, now = Date.now()) {
       if (c.due <= now) due++;
     }
   }
-  return { due, fresh, learned, total: fresh + learned, deeper };
+  // A paused repertoire asks for nothing: nothing is due, nothing new is waiting.
+  if (rep.paused) return { due: 0, fresh: 0, learned, total: fresh + learned, deeper, paused: true };
+  return { due, fresh, learned, total: fresh + learned, deeper, paused: false };
 }
 
 export function formatInterval(ms: number): string {

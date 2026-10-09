@@ -147,7 +147,8 @@ export function classify(a: AppData, b: AppData): 'none' | 'training' | 'edit' {
       x.name !== y.name ||
       x.side !== y.side ||
       !!x.study !== !!y.study ||
-      x.trainDepth !== y.trainDepth
+      x.trainDepth !== y.trainDepth ||
+      !!x.paused !== !!y.paused
     ) {
       return 'edit';
     }

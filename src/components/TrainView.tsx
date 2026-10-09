@@ -11,15 +11,17 @@ import {
   myEdgesInOrder,
   reachable,
   ROOT,
+  setPaused,
   setTrainDepth,
   type PathStep,
   type Repertoire,
 } from '../lib/repertoire';
-import { buildQueue, counts, formatInterval, gradeCard, Rating, State, type TrainItem } from '../lib/srs';
+import { buildQueue, counts, formatInterval, gradeCard, Rating, resetCards, State, type TrainItem } from '../lib/srs';
 import { activeRep, useApp } from '../lib/store';
 import { saveNow, type SaveResult } from '../lib/sync';
 import { tokensToShapes } from '../lib/shapes';
 import { Board, moveArrow, sideCircle, type Shape } from './Board';
+import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import { DeckTabs, MistakesTrain } from './MistakesTrain';
 import { SavedNote, saveMessage } from './SaveIndicator';
@@ -57,6 +59,11 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
   const updateRep = useApp((s) => s.updateRep);
   const setDepth = (d: number | undefined) =>
     updateRep(rep.id, (r) => setTrainDepth(r, d && d < maxMove ? d : undefined), 'training depth', { undoable: false });
+  const [resetting, setResetting] = useState(false);
+  const togglePause = () => {
+    updateRep(rep.id, (r) => setPaused(r, !rep.paused), rep.paused ? 'resume training' : 'pause training', { undoable: false });
+    useApp.getState().showToast(rep.paused ? `Training of “${rep.name}” resumed` : `Training of “${rep.name}” paused`);
+  };
 
   // The branch may have disappeared (pruned, or synced from another device).
   const lost = !!scope && !scopePath;
@@ -116,6 +123,16 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
             Only the branch after <b>{formatLine((scopePath ?? []).map((p) => p.san))}</b>
           </div>
         )}
+        {rep.paused && (
+          <div className="notice row wrap" style={{ gap: 8 }}>
+            <span style={{ flex: 1, minWidth: 200 }}>
+              <b>Training paused.</b> This repertoire asks for no reviews and does not count as due. Practice lines still work.
+            </span>
+            <button className="btn sm primary" onClick={togglePause}>
+              <Icon name="train" size={14} /> Resume
+            </button>
+          </div>
+        )}
         {maxMove > 1 && allBranchEdges.length > 0 && (
           <DepthSetting depth={depth} maxMove={maxMove} total={total} fresh={c.fresh} deeper={deeper} onChange={setDepth} />
         )}
@@ -164,11 +181,11 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
               <div className="help">Nothing to review right now. Choose a number of new moves to learn some.</div>
             )}
             <div className="row wrap">
-              <button className="btn primary" disabled={!(c.due + Math.min(c.fresh, newLimit))} onClick={startReview}>
+              <button className="btn primary" disabled={rep.paused || !(c.due + Math.min(c.fresh, newLimit))} onClick={startReview}>
                 <Icon name="train" size={16} /> Start review ({c.due + Math.min(c.fresh, newLimit)})
               </button>
               {scope && (
-                <button className="btn" onClick={startDrill} title="Quiz every one of your moves in this branch, due or not">
+                <button className="btn" disabled={rep.paused} onClick={startDrill} title="Quiz every one of your moves in this branch, due or not">
                   <Icon name="target" size={16} /> Drill whole branch ({total})
                 </button>
               )}
@@ -176,9 +193,31 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
                 <Icon name="tree" size={16} /> Practice lines{scope ? ' from here' : ''}
               </button>
             </div>
+            <div className="row wrap train-admin">
+              {!rep.paused && (
+                <button className="btn sm ghost" onClick={togglePause} title="No reviews and nothing due for this repertoire until you resume">
+                  Pause training
+                </button>
+              )}
+              <button
+                className="btn sm ghost"
+                disabled={!allBranchEdges.some((e) => rep.cards[edgeId(e.from, e.uci)]?.state !== State.New)}
+                onClick={() => setResetting(true)}
+              >
+                {scope ? 'Reset this branch…' : 'Reset progress…'}
+              </button>
+            </div>
           </>
         )}
       </div>
+      {resetting && (
+        <ResetDialog
+          rep={rep}
+          ids={scope ? new Set(allBranchEdges.map((e) => edgeId(e.from, e.uci))) : undefined}
+          branch={scope ? formatLine((scopePath ?? []).map((p) => p.san)) : null}
+          onClose={() => setResetting(false)}
+        />
+      )}
       <div className="card card-pad help stack" style={{ gap: 6 }}>
         <b style={{ color: 'var(--text)' }}>How it works</b>
         <div>
@@ -196,8 +235,52 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
           line, later deeper. Moves beyond it are left out of every kind of training; the ones you had learned keep their
           schedule and come back when you go deeper.
         </div>
+        <div>
+          <b>Pause training</b> stops the reviews of a repertoire you are not working on now (it no longer counts as due);{' '}
+          <b>Resume</b> brings them back. <b>Reset progress</b> makes its moves new again, or those of one branch when you
+          train from there.
+        </div>
       </div>
     </div>
+  );
+}
+
+/** Training progress back to the start, for the whole repertoire or one branch. Undoable. */
+function ResetDialog({ rep, ids, branch, onClose }: { rep: Repertoire; ids?: Set<string>; branch: string | null; onClose: () => void }) {
+  const cards = Object.entries(rep.cards).filter(([id]) => !ids || ids.has(id));
+  const learned = cards.filter(([, c]) => c.state !== State.New).length;
+  const confirm = () => {
+    const { updateRep, undoLast, showToast } = useApp.getState();
+    updateRep(rep.id, (r) => resetCards(r, ids), branch ? 'reset of a branch' : 'reset of the training');
+    onClose();
+    showToast(`Training ${branch ? 'of the branch ' : ''}reset: ${cards.length} moves are new again`, { label: 'Undo', run: undoLast });
+  };
+  return (
+    <Dialog title={branch ? 'Reset this branch?' : `Reset the training of “${rep.name}”?`} onClose={onClose}>
+      <div>
+        {branch ? (
+          <>
+            All <b>{cards.length}</b> of your moves after <b>{branch}</b> become new again
+          </>
+        ) : (
+          <>
+            All <b>{cards.length}</b> of your moves become new again
+          </>
+        )}{' '}
+        (<b>{learned}</b> of them learned now): you learn them again from the start, as if you had never trained them. Your
+        moves, comments, drawings and engine checks stay as they are.
+      </div>
+      <div className="help">You can undo it (Undo, or Ctrl+Z), also after it has synced to your other devices.</div>
+      <div className="row wrap">
+        <span className="spacer" />
+        <button className="btn ghost" autoFocus onClick={onClose}>
+          Cancel
+        </button>
+        <button className="btn danger solid" onClick={confirm}>
+          Reset
+        </button>
+      </div>
+    </Dialog>
   );
 }
 
