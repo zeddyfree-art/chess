@@ -146,7 +146,8 @@ export function classify(a: AppData, b: AppData): 'none' | 'training' | 'edit' {
       x.engine !== y.engine ||
       x.name !== y.name ||
       x.side !== y.side ||
-      !!x.study !== !!y.study
+      !!x.study !== !!y.study ||
+      x.trainDepth !== y.trainDepth
     ) {
       return 'edit';
     }

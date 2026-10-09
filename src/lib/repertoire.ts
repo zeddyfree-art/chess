@@ -49,6 +49,9 @@ export interface Repertoire {
   /** A study repertoire: trained, but not one you play now, so your games are not checked against it.
    *  Absent (the default) means "in play". */
   study?: boolean;
+  /** Train only your moves up to this move number (1 = your first move), to learn a wide repertoire breadth-first.
+   *  Deeper cards keep their schedule and come back when you raise it. Absent: every move. */
+  trainDepth?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -136,8 +139,56 @@ export function onlyCardsChanged(a: Repertoire, b: Repertoire): boolean {
     a.name === b.name &&
     a.side === b.side &&
     a.profileId === b.profileId &&
-    !!a.study === !!b.study
+    !!a.study === !!b.study &&
+    a.trainDepth === b.trainDepth
   );
+}
+
+export function setTrainDepth(rep: Repertoire, depth: number | undefined): Repertoire {
+  const { trainDepth: _old, ...rest } = rep;
+  return depth ? { ...rest, trainDepth: depth, updatedAt: Date.now() } : { ...rest, updatedAt: Date.now() };
+}
+
+/** The move number at which each position is first reached (shortest move order), for positions where a move is
+ *  still to come: a move played in a position at ply p is move floor(p / 2) + 1 of its side. */
+const plyCache = new WeakMap<Repertoire['positions'], Map<string, number>>();
+export function firstPly(rep: Repertoire): Map<string, number> {
+  let plies = plyCache.get(rep.positions);
+  if (!plies) {
+    plies = new Map([[ROOT, 0]]);
+    const queue = [ROOT];
+    while (queue.length) {
+      const key = queue.shift()!;
+      const p = plies.get(key)!;
+      for (const m of movesAt(rep, key))
+        if (!plies.has(m.to)) {
+          plies.set(m.to, p + 1);
+          queue.push(m.to);
+        }
+    }
+    plyCache.set(rep.positions, plies);
+  }
+  return plies;
+}
+
+export const moveNumberAt = (ply: number) => Math.floor(ply / 2) + 1;
+
+/** Whether your move from position `from` is within the repertoire's training depth. */
+export function inTrainDepth(rep: Repertoire): (from: string) => boolean {
+  if (!rep.trainDepth) return () => true;
+  const plies = firstPly(rep);
+  const max = rep.trainDepth;
+  return (from) => {
+    const p = plies.get(from);
+    return p !== undefined && moveNumberAt(p) <= max;
+  };
+}
+
+/** The highest move number of your moves: training up to here is training everything. */
+export function maxMyMoveNumber(rep: Repertoire): number {
+  let max = 0;
+  for (const [key, p] of firstPly(rep)) if (isMine(rep, key) && movesAt(rep, key).length) max = Math.max(max, moveNumberAt(p));
+  return max;
 }
 
 /** In play: a repertoire you play now; your games are checked against it. */

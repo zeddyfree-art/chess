@@ -220,11 +220,11 @@ export function HomeView() {
                 <b>{st.lineEnds}</b>
                 <span>{st.lineEnds === 1 ? 'line' : 'lines'}</span>
               </div>
-              <div className="stat" title="Your moves that are due for review">
+              <div className="stat" title={rep.trainDepth ? `Your moves up to move ${rep.trainDepth} that are due for review` : 'Your moves that are due for review'}>
                 <b style={{ color: srs.due ? 'var(--due)' : undefined }}>{srs.due}</b>
                 <span>due</span>
               </div>
-              <div className="stat" title="Your moves you have not learned yet">
+              <div className="stat" title={rep.trainDepth ? `Your moves up to move ${rep.trainDepth} you have not learned yet` : 'Your moves you have not learned yet'}>
                 <b style={{ color: srs.fresh ? 'var(--accent)' : undefined }}>{srs.fresh}</b>
                 <span>new</span>
               </div>
@@ -232,9 +232,10 @@ export function HomeView() {
             {st.lineEnds > 0 && (
               <div className="small muted">
                 {st.myMoves} of your moves to learn · lines average {st.avgLine} moves, longest {st.longest}
+                {rep.trainDepth ? ` · trained up to move ${rep.trainDepth}` : ''}
               </div>
             )}
-            <div className="progress" title={`${srs.learned} of ${srs.total} moves learned`}>
+            <div className="progress" title={`${srs.learned} of ${srs.total} moves learned${rep.trainDepth ? ` (up to move ${rep.trainDepth})` : ''}`}>
               <div style={{ width: `${(srs.learned / Math.max(1, srs.total)) * 100}%` }} />
             </div>
             <div className="row" onClick={(e) => e.stopPropagation()}>

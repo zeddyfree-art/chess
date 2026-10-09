@@ -51,7 +51,7 @@ const contentKeys = new WeakMap<Repertoire, string>();
 function contentKey(r: Repertoire): string {
   let k = contentKeys.get(r);
   if (k === undefined) {
-    k = JSON.stringify([r.name, r.side, r.profileId, r.positions, r.notes, r.shapes ?? {}, r.engine, !!r.study]);
+    k = JSON.stringify([r.name, r.side, r.profileId, r.positions, r.notes, r.shapes ?? {}, r.engine, !!r.study, r.trainDepth ?? 0]);
     contentKeys.set(r, k);
   }
   return k;
@@ -129,6 +129,7 @@ function mergeContent(local: Repertoire, remote: Repertoire, base: Repertoire | 
     name: pick(local.name, remote.name, base?.name, !!base),
     side: pick(local.side, remote.side, base?.side, !!base),
     study: pick(!!local.study, !!remote.study, base ? !!base.study : undefined, !!base) || undefined,
+    trainDepth: pick(local.trainDepth, remote.trainDepth, base?.trainDepth, !!base),
     positions,
     notes: byKey(local.notes, remote.notes, base?.notes),
     shapes: byKey(local.shapes, remote.shapes, base?.shapes),

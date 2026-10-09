@@ -57,7 +57,10 @@ export function AboutView({ standalone = false }: { standalone?: boolean }) {
             parts.
           </dd>
           <dt>Train</dt>
-          <dd>Spaced repetition: every move you play is a card that comes back just before you would forget it.</dd>
+          <dd>
+            Spaced repetition: every move you play is a card that comes back just before you would forget it. For a wide
+            repertoire, train up to an early move first and go deeper step by step.
+          </dd>
           <dt>Play</dt>
           <dd>Practice games against Maia-3, a human-like opponent, at any rating from 600 to 2600.</dd>
           <dt>Games</dt>

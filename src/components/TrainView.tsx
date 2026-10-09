@@ -1,6 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatLine, lichessAnalysisUrl, lineFromSans, moveFromBoard, uciToArrow, type PlayedMove, type Side } from '../lib/chess';
-import { edgeId, findPath, isMine, movesAt, myEdgesInOrder, reachable, ROOT, type PathStep, type Repertoire } from '../lib/repertoire';
+import {
+  edgeId,
+  findPath,
+  inTrainDepth,
+  isMine,
+  maxMyMoveNumber,
+  moveNumberAt,
+  movesAt,
+  myEdgesInOrder,
+  reachable,
+  ROOT,
+  setTrainDepth,
+  type PathStep,
+  type Repertoire,
+} from '../lib/repertoire';
 import { buildQueue, counts, formatInterval, gradeCard, Rating, State, type TrainItem } from '../lib/srs';
 import { activeRep, useApp } from '../lib/store';
 import { saveNow, type SaveResult } from '../lib/sync';
@@ -33,10 +47,16 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
 
   const scopePath = useMemo(() => (scope ? findPath(rep, scope) : []), [rep, scope]);
   const scopeKeys = useMemo(() => (scope && scopePath ? reachable(rep.positions, scope) : undefined), [rep, scope, scopePath]);
-  const branchEdges = useMemo(
-    () => myEdgesInOrder(rep).filter((e) => !scopeKeys || scopeKeys.has(e.from)),
-    [rep, scopeKeys],
-  );
+  const allBranchEdges = useMemo(() => myEdgesInOrder(rep).filter((e) => !scopeKeys || scopeKeys.has(e.from)), [rep, scopeKeys]);
+  // Only up to the repertoire's training depth: the deeper moves wait.
+  const branchEdges = useMemo(() => {
+    const inDepth = inTrainDepth(rep);
+    return allBranchEdges.filter((e) => inDepth(e.from));
+  }, [rep, allBranchEdges]);
+  const maxMove = useMemo(() => maxMyMoveNumber(rep), [rep]);
+  const updateRep = useApp((s) => s.updateRep);
+  const setDepth = (d: number | undefined) =>
+    updateRep(rep.id, (r) => setTrainDepth(r, d && d < maxMove ? d : undefined), 'training depth', { undoable: false });
 
   // The branch may have disappeared (pruned, or synced from another device).
   const lost = !!scope && !scopePath;
@@ -45,7 +65,7 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
   }, [lost, trainFrom]);
   if (lost) return null;
   if (mode === 'review') return <ReviewSession rep={rep} initial={queue} onExit={() => setMode(null)} />;
-  if (mode === 'lines') return <LinesSession rep={rep} start={scopePath ?? []} onExit={() => setMode(null)} />;
+  if (mode === 'lines') return <LinesSession rep={rep} start={scopePath ?? []} depth={rep.trainDepth} onExit={() => setMode(null)} />;
 
   const now = Date.now();
   const c = { due: 0, fresh: 0, learned: 0 };
@@ -59,6 +79,8 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
     }
   }
   const total = c.fresh + c.learned;
+  const deeper = allBranchEdges.length - branchEdges.length;
+  const depth = rep.trainDepth;
 
   const startReview = () => {
     setQueue(buildQueue(rep, { newLimit, subtreeOf: scopeKeys }).map((i) => ({ ...i, kind: i.isNew ? 'learn' : 'review' })));
@@ -94,9 +116,16 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
             Only the branch after <b>{formatLine((scopePath ?? []).map((p) => p.san))}</b>
           </div>
         )}
+        {maxMove > 1 && allBranchEdges.length > 0 && (
+          <DepthSetting depth={depth} maxMove={maxMove} total={total} fresh={c.fresh} deeper={deeper} onChange={setDepth} />
+        )}
         {total === 0 ? (
           <div className="empty">
-            {scope ? 'There are none of your moves in this branch yet.' : 'No moves to train yet. Build your repertoire first.'}
+            {deeper > 0
+              ? `This branch starts after move ${depth}, how deep you train this repertoire. Go deeper to train it.`
+              : scope
+                ? 'There are none of your moves in this branch yet.'
+                : 'No moves to train yet. Build your repertoire first.'}
           </div>
         ) : (
           <>
@@ -162,7 +191,60 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
           random lines all the way through and does not affect the schedule. Use <b>Train from here</b> in the tree or on the
           build board to focus on one branch.
         </div>
+        <div>
+          <b>Train up to move</b> (per repertoire) learns a wide repertoire breadth-first: first the opening moves of every
+          line, later deeper. Moves beyond it are left out of every kind of training; the ones you had learned keep their
+          schedule and come back when you go deeper.
+        </div>
       </div>
+    </div>
+  );
+}
+
+/** How deep this repertoire is trained: − / + per move, up to the end of the lines. */
+function DepthSetting({
+  depth,
+  maxMove,
+  total,
+  fresh,
+  deeper,
+  onChange,
+}: {
+  depth: number | undefined;
+  maxMove: number;
+  total: number;
+  fresh: number;
+  deeper: number;
+  onChange: (d: number | undefined) => void;
+}) {
+  const shown = depth ?? maxMove;
+  return (
+    <div className="stack" style={{ gap: 4 }}>
+      <div className="row wrap" style={{ gap: 6 }}>
+        <span className="muted">Train up to</span>
+        <button className="btn sm icon" aria-label="Less deep" title="One move less deep" disabled={shown <= 1} onClick={() => onChange(shown - 1)}>
+          −
+        </button>
+        <b className="num depth-value">{depth ? `move ${depth}` : 'the end'}</b>
+        <button className="btn sm icon" aria-label="Deeper" title="One move deeper" disabled={!depth} onClick={() => onChange(shown + 1)}>
+          +
+        </button>
+        {depth ? (
+          <button className="btn sm ghost" onClick={() => onChange(undefined)}>
+            All moves
+          </button>
+        ) : null}
+      </div>
+      <div className="small muted">
+        {depth
+          ? `${total} of your moves up to move ${depth}; ${deeper} deeper ${deeper === 1 ? 'one waits' : 'ones wait'} until you go deeper (their schedule is kept).`
+          : `Your lines go to move ${maxMove}. For a wide repertoire, train up to an early move first and go deeper once that sits.`}
+      </div>
+      {depth && total > 0 && fresh === 0 && deeper > 0 && (
+        <div className="notice small">
+          You have learned every move up to move {depth}. When the reviews go well, go one move deeper with <b>+</b>.
+        </div>
+      )}
     </div>
   );
 }
@@ -455,7 +537,7 @@ function comment(rep: Repertoire, item: TrainItem): string | undefined {
 }
 
 /** Ungraded practice: plays random prepared opponent moves; you answer with your repertoire until the line ends. */
-function LinesSession({ rep, start, onExit }: { rep: Repertoire; start: PathStep[]; onExit: () => void }) {
+function LinesSession({ rep, start, depth, onExit }: { rep: Repertoire; start: PathStep[]; depth?: number; onExit: () => void }) {
   const startKey = start.at(-1)?.to ?? ROOT;
   const startArrow = start.length ? uciToArrow(start[start.length - 1].uci) : null;
   const [pos, setPos] = useState(startKey);
@@ -492,10 +574,17 @@ function LinesSession({ rep, start, onExit }: { rep: Repertoire; start: PathStep
 
   // Opponent's turn: pick one of the prepared replies at random.
   useEffect(() => {
-    const moves = movesAt(rep, pos);
+    // With a training depth, a line ends after your last move within it (the ply of your next move would be too deep).
+    const nextMine = isMine(rep, pos) ? line.length : line.length + 1;
+    const tooDeep = !!depth && moveNumberAt(nextMine) > depth;
+    const moves = tooDeep ? [] : movesAt(rep, pos);
+    if (tooDeep && line.length <= start.length) {
+      setMessage(<>This branch starts after move {depth}, how deep you train this repertoire.</>);
+      return;
+    }
     if (!moves.length) {
       if (line.length > start.length) {
-        setMessage(<>End of the line ✓</>);
+        setMessage(tooDeep ? <>Up to move {depth} ✓</> : <>End of the line ✓</>);
         setStats((s) => ({ ...s, lines: s.lines + 1 }));
         later(restart, 1200);
       }

@@ -1,7 +1,7 @@
 // Spaced repetition with FSRS (the algorithm modern Anki uses). One card per
 // "your move" in the repertoire: position where it is your turn -> the move you play.
 import { createEmptyCard, fsrs, Rating, State, type Card, type Grade } from 'ts-fsrs';
-import { edgeId, myEdgesInOrder, type Repertoire, type SrsCard } from './repertoire';
+import { edgeId, inTrainDepth, myEdgesInOrder, splitEdgeId, type Repertoire, type SrsCard } from './repertoire';
 
 const scheduler = fsrs({ request_retention: 0.9, enable_fuzz: true });
 
@@ -55,14 +55,17 @@ export interface TrainItem {
   isNew: boolean;
 }
 
-/** Due reviews first (in tree order so consecutive quizzes share context), then up to `newLimit` new moves. */
+/** Due reviews first (in tree order so consecutive quizzes share context), then up to `newLimit` new moves.
+ *  Only moves within the repertoire's training depth. */
 export function buildQueue(rep: Repertoire, opts: { newLimit: number; now?: number; subtreeOf?: Set<string> }): TrainItem[] {
   const now = opts.now ?? Date.now();
   const due: TrainItem[] = [];
   const fresh: TrainItem[] = [];
+  const inDepth = inTrainDepth(rep);
   for (const e of myEdgesInOrder(rep)) {
     const id = edgeId(e.from, e.uci);
     if (opts.subtreeOf && !opts.subtreeOf.has(e.from)) continue;
+    if (!inDepth(e.from)) continue;
     const card = rep.cards[id];
     if (!card) continue;
     const item = { id, from: e.from, uci: e.uci, san: e.san, isNew: card.state === State.New };
@@ -72,18 +75,25 @@ export function buildQueue(rep: Repertoire, opts: { newLimit: number; now?: numb
   return [...due, ...fresh.slice(0, opts.newLimit)];
 }
 
+/** Cards within the training depth; `deeper`: those beyond it (they wait, with their schedule). */
 export function counts(rep: Repertoire, now = Date.now()) {
   let due = 0;
   let fresh = 0;
   let learned = 0;
-  for (const c of Object.values(rep.cards)) {
+  let deeper = 0;
+  const inDepth = inTrainDepth(rep);
+  for (const [id, c] of Object.entries(rep.cards)) {
+    if (rep.trainDepth && !inDepth(splitEdgeId(id).from)) {
+      deeper++;
+      continue;
+    }
     if (c.state === State.New) fresh++;
     else {
       learned++;
       if (c.due <= now) due++;
     }
   }
-  return { due, fresh, learned, total: fresh + learned };
+  return { due, fresh, learned, total: fresh + learned, deeper };
 }
 
 export function formatInterval(ms: number): string {
