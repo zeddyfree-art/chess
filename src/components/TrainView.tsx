@@ -23,10 +23,11 @@ import { tokensToShapes } from '../lib/shapes';
 import { Board, moveArrow, sideCircle, type Shape } from './Board';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
+import { LineReviewSession } from './LineReview';
 import { DeckTabs, MistakesTrain } from './MistakesTrain';
 import { SavedNote, saveMessage } from './SaveIndicator';
 
-type Mode = 'review' | 'lines';
+type Mode = 'review' | 'lines' | 'line-review';
 
 /** Two decks: the moves of the selected repertoire, and the mistakes from your own games. */
 export function TrainView() {
@@ -44,6 +45,11 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
   useEffect(() => {
     localStorage.setItem('new-limit', String(newLimit));
   }, [newLimit]);
+  // Review in whole lines instead of one card at a time (remembered on this device).
+  const [wholeLines, setWholeLines] = useState(() => localStorage.getItem('train-whole-lines') === '1');
+  useEffect(() => {
+    localStorage.setItem('train-whole-lines', wholeLines ? '1' : '0');
+  }, [wholeLines]);
   // Freeze the queue when a session starts so grading doesn't reshuffle it.
   const [queue, setQueue] = useState<QItem[]>([]);
 
@@ -72,6 +78,7 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
   }, [lost, trainFrom]);
   if (lost) return null;
   if (mode === 'review') return <ReviewSession rep={rep} initial={queue} onExit={() => setMode(null)} />;
+  if (mode === 'line-review') return <LineReviewSession rep={rep} items={queue} start={scopePath ?? []} onExit={() => setMode(null)} />;
   if (mode === 'lines') return <LinesSession rep={rep} start={scopePath ?? []} depth={rep.trainDepth} onExit={() => setMode(null)} />;
 
   const now = Date.now();
@@ -91,7 +98,7 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
 
   const startReview = () => {
     setQueue(buildQueue(rep, { newLimit, subtreeOf: scopeKeys }).map((i) => ({ ...i, kind: i.isNew ? 'learn' : 'review' })));
-    setMode('review');
+    setMode(wholeLines ? 'line-review' : 'review');
   };
 
   const startDrill = () => {
@@ -180,6 +187,17 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
             {newLimit === 0 && !c.due && c.fresh > 0 && (
               <div className="help">Nothing to review right now. Choose a number of new moves to learn some.</div>
             )}
+            <label className="row small" style={{ gap: 6, cursor: 'pointer', alignItems: 'flex-start' }}>
+              <input type="checkbox" checked={wholeLines} onChange={(e) => setWholeLines(e.target.checked)} style={{ marginTop: 2 }} />
+              <span>
+                <b>Play whole lines</b>
+                <span className="muted">
+                  {' '}
+                  — you play all your moves of each line{scope ? ' from here' : ' from the start'}, for the reflex. Moves that are due
+                  count as usual; a move that is not due only counts when you get it wrong.
+                </span>
+              </span>
+            </label>
             <div className="row wrap">
               <button className="btn primary" disabled={rep.paused || !(c.due + Math.min(c.fresh, newLimit))} onClick={startReview}>
                 <Icon name="train" size={16} /> Start review ({c.due + Math.min(c.fresh, newLimit)})
@@ -234,6 +252,10 @@ function RepertoireTrain({ rep }: { rep: Repertoire }) {
           <b>Train up to move</b> (per repertoire) learns a wide repertoire breadth-first: first the opening moves of every
           line, later deeper. Moves beyond it are left out of every kind of training; the ones you had learned keep their
           schedule and come back when you go deeper.
+        </div>
+        <div>
+          <b>Play whole lines</b> reviews in lines instead of single cards: you play every one of your moves of each line,
+          for the playing reflex. Due moves count as usual; a move that is not due only counts when you get it wrong.
         </div>
         <div>
           <b>Pause training</b> stops the reviews of a repertoire you are not working on now (it no longer counts as due);{' '}
