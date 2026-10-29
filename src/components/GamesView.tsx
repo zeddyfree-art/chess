@@ -315,6 +315,7 @@ export function GameRow({ game, analysing, rating }: { game: PlayedGame; analysi
         <span className="small muted">
           {game.myColor === 'white' ? '♔ White' : '♚ Black'}
           {game.source === 'practice' ? ` · ${tcShort(game.timeControl) ?? 'no clock'}` : game.speed ? ` · ${SPEED_NAMES[game.speed]}` : ''}
+          {game.source === 'pawnquest' && <> · <span className="badge accent">Pawnquest</span></>}
           {rating && (
             <>
               {' · rated '}

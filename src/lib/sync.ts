@@ -16,6 +16,7 @@ import {
   googleClientId,
   listBackups,
   listGameBackups,
+  listInbox,
   moveFile,
   preloadGoogle,
   requestToken,
@@ -25,6 +26,7 @@ import {
   type DriveFile,
   type Layout,
 } from './drive';
+import { pawnquestGame, type PlayedGame } from './games';
 import { mergeGames, parseGamesFile, sameGames, serializeGames, useGames } from './gamesStore';
 import { mergeData, sameSyncedContent, type SyncBase } from './merge';
 import { exportBackup, flushLocal, loadSyncBase, parseBackup, saveSyncBase, useApp, useSaveState, type AppData } from './store';
@@ -357,7 +359,9 @@ async function run() {
     const stillDirty = changeSeq !== seqAtStart;
     writeMeta({ folderId: folders.root, fileId: file.id, version, dirty: stillDirty });
 
+    const inbox = await takeInbox();
     const games = await syncGames(folders, gamesSeqAtStart);
+    for (const id of inbox) await deleteFile(id).catch(() => {});
     if (meta.layout !== LAYOUT) {
       await moveIntoLayout(folders);
       writeMeta({ layout: LAYOUT, folders });
@@ -415,6 +419,26 @@ async function syncGames(folders: Layout, seqAtStart: number): Promise<{ stillDi
   const stillDirty = gamesSeq !== seqAtStart;
   writeMeta({ gamesFileId: file.id, gamesVersion: version, gamesDirty: stillDirty });
   return { stillDirty };
+}
+
+/** Takes in the games Pawnquest put in the inbox, for the active player. Returns the inbox files that are now in
+ *  the games (removed once the games file is synced), and leaves the rest (no player yet, or not a game). */
+async function takeInbox(): Promise<string[]> {
+  const profileId = useApp.getState().data.activeProfileId;
+  if (!profileId || !useGames.getState().loaded) return [];
+  const files = await listInbox();
+  if (!files.length) return [];
+  const taken: string[] = [];
+  const games: PlayedGame[] = [];
+  for (const f of files) {
+    const g = pawnquestGame(await download(f.id), profileId);
+    if (!g) continue;
+    taken.push(f.id);
+    // A game you deleted here stays deleted.
+    if (!useGames.getState().data.deleted[g.id]) games.push(g);
+  }
+  if (games.length) useGames.getState().addGames(games);
+  return taken;
 }
 
 /** Puts files made before the subfolders existed in their place (once per device; quick when done). */

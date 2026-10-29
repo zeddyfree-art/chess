@@ -8,6 +8,7 @@
 //     Sync/                 the live copies every device syncs with
 //       repertoire-sync.json    players, repertoires, training (incl. mistake cards)
 //       games-sync.json         your imported games and their analysis
+//     Inbox/                games other apps (Pawnquest) put here, one PGN each; taken in at the next sync
 //     Backups/
 //       Repertoire/         repertoire-backup-<date>.json, one a day, the last 30
 //       Games/              games-backup-<date>.json, one a week, the last 8
@@ -317,6 +318,11 @@ export function updateFile(id: string, content: string): Promise<DriveFile> {
 
 export function deleteFile(id: string): Promise<void> {
   return api<void>(`${API}/files/${id}`, { method: 'DELETE' });
+}
+
+/** Games waiting in the inbox (put there by Pawnquest, wherever the folder is). */
+export function listInbox(): Promise<DriveFile[]> {
+  return findByRole('inbox-game', 'createdTime');
 }
 
 export function listBackups(): Promise<DriveFile[]> {

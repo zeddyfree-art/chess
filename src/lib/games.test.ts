@@ -15,7 +15,7 @@ import {
   winPct,
 } from './analysis';
 import { START_KEY } from './chess';
-import { colorOf, gameLine, parsePgnGames, speedFromTimeControl, toPlayedGame, type GamesData, type PlayedGame } from './games';
+import { colorOf, gameLine, parsePgnGames, pawnquestGame, speedFromTimeControl, toPlayedGame, type GamesData, type PlayedGame } from './games';
 import { mergeGames, sameGames } from './gamesStore';
 import { fromLichessJson, type LichessGameJson } from './lichessGames';
 import { addCards, cardFromMoment, mergeMistakes, mistakeQueue } from './mistakes';
@@ -306,5 +306,35 @@ describe('updating games and keeping unknown data', () => {
     const local = { ...EMPTY_DATA };
     const remote = { ...EMPTY_DATA, futureThing: [1, 2, 3] } as typeof EMPTY_DATA;
     expect((mergeData(local, remote) as unknown as { futureThing: number[] }).futureThing).toEqual([1, 2, 3]);
+  });
+});
+
+describe('pawnquestGame', () => {
+  const pgn = `[Event "Pawnquest"]
+[Site "https://zeddyfree-art.github.io/pawnquest/"]
+[Date "2026.10.29"]
+[White "Pip"]
+[Black "Zed"]
+[Result "0-1"]
+[TimeControl "600+5"]
+[Source "Pawnquest"]
+[YourColor "Black"]
+[PawnquestId "g1"]
+
+1. f3 e5 2. g4 Qh4# 0-1
+`;
+
+  it('takes the side from YourColor and a stable id', () => {
+    const g = pawnquestGame(pgn, 'p1')!;
+    expect(g.id).toBe('p1|pawnquest:g1');
+    expect(g.source).toBe('pawnquest');
+    expect(g.myColor).toBe('black');
+    expect(g.moves).toEqual(['f3', 'e5', 'g4', 'Qh4#']);
+    expect(g.result).toBe('0-1');
+  });
+
+  it('ignores files that are not a Pawnquest game', () => {
+    expect(pawnquestGame(pgn.replace(/\[YourColor.*\n/, ''), 'p1')).toBeNull();
+    expect(pawnquestGame('not a pgn', 'p1')).toBeNull();
   });
 });

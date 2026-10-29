@@ -12,7 +12,8 @@ export interface PlayedGame {
   /** `<profile id>|<source id>`: the same game can belong to two players of this app (who played each other). */
   id: string;
   profileId: string;
-  source: 'lichess' | 'pgn' | 'practice';
+  /** 'pawnquest': played in Pawnquest (the RPG chess game), which puts each game in the Drive inbox. */
+  source: 'lichess' | 'pgn' | 'practice' | 'pawnquest';
   /** Where the game can be seen online, when known. */
   url?: string;
   white: string;
@@ -190,6 +191,8 @@ function sourceIdOf(h: Map<string, string>, moves: string[]): { sourceId: string
   if (lichess) return { sourceId: `lichess:${lichess[1]}`, url: `https://lichess.org/${lichess[1]}` };
   const chesscom = /chess\.com\/(?:game\/)?(?:live|daily)\/(?:game\/)?(\d+)/.exec(link) ?? /chess\.com\/(?:game\/)?(?:live|daily)\/(?:game\/)?(\d+)/.exec(site);
   if (chesscom) return { sourceId: `chesscom:${chesscom[1]}`, url: link || site };
+  const pawnquest = h.get('PawnquestId');
+  if (pawnquest) return { sourceId: `pawnquest:${pawnquest}` };
   const fingerprint = [h.get('White'), h.get('Black'), h.get('Date'), h.get('Round'), moves.join(' ')].join('|');
   return { sourceId: `pgn:${hash(fingerprint)}` };
 }
@@ -289,6 +292,15 @@ export function toPlayedGame(g: PgnGame, profileId: string, myColor: Side, sourc
   const now = Date.now();
   const { sourceId, ...rest } = g;
   return { ...rest, id: gameId(profileId, sourceId), profileId, source, myColor, addedAt: now, updatedAt: now };
+}
+
+/** A game Pawnquest put in the Drive inbox (one per file): its [YourColor] says which side was yours, whatever name
+ *  you used there. Null when the file is not such a game. */
+export function pawnquestGame(text: string, profileId: string): PlayedGame | null {
+  const color = /\[YourColor "(White|Black)"\]/.exec(text)?.[1];
+  const g = parsePgnGames(text).games[0];
+  if (!color || !g) return null;
+  return toPlayedGame(g, profileId, color === 'White' ? 'white' : 'black', 'pawnquest');
 }
 
 /** Starting time and increment in seconds, from a TimeControl like "180+2" (null for daily games or unknown). */
