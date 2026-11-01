@@ -8,6 +8,7 @@ import { stats } from '../lib/repertoire';
 import { playSound, setSoundSet, SOUND_SET_NAMES, SOUND_SETS, soundSet, type SoundSet } from '../lib/sound';
 import { useOpeningNames } from '../lib/openings';
 import { installApp, useInstall } from '../lib/install';
+import { keepStorage, useStorageState } from '../lib/persist';
 import { connectDrive, disconnectDrive, driveBackups, loadDriveBackup, reconnectDrive, syncNow, useSync } from '../lib/sync';
 import { useGames } from '../lib/gamesStore';
 import { activeRep, exportBackup, lichessRatingOf, parseBackup, PROFILE_COLORS, profileRating, useApp, type AppData, type Profile } from '../lib/store';
@@ -456,7 +457,7 @@ function InstallCard() {
   return (
     <div className="card">
       <div className="section">
-        <h2>Install the app</h2>
+        <h2>App and storage on this device</h2>
       </div>
       <div className="section stack" style={{ gap: 10 }}>
         {state === 'installed' ? (
@@ -482,12 +483,44 @@ function InstallCard() {
             Home screen</b> or <b>Install app</b>. Firefox on a computer cannot install web apps.
           </div>
         )}
+        <StorageLine />
         <div className="help">
           The installed app is the same as this site, with the same data on this device (and your Google Drive, when
           connected). It also starts without a network: building, training and playing against Maia work offline; the
           Lichess database, games and syncing need a connection. Updates arrive by themselves.
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Whether the browser keeps this device's data for good, or may clear it when space runs low. */
+function StorageLine() {
+  const [st, refresh] = useStorageState();
+  const showToast = useApp((s) => s.showToast);
+  if (st.persisted === null) return null;
+  const mb = st.usage !== undefined ? ` (${Math.max(0.1, Math.round(st.usage / 1e5) / 10).toLocaleString()} MB)` : '';
+  if (st.persisted)
+    return (
+      <div className="row small" style={{ gap: 6 }}>
+        <Icon name="check" size={14} /> Storage on this device{mb} is lasting: the browser will not clear it to make room.
+      </div>
+    );
+  const ask = () =>
+    keepStorage(false).then((ok) => {
+      refresh();
+      showToast(ok ? 'Storage on this device is now lasting' : 'The browser did not allow it (yet): installing the app usually helps');
+    });
+  return (
+    <div className="row wrap small" style={{ gap: 8 }}>
+      <span style={{ flex: 1, minWidth: 220 }}>
+        Storage on this device{mb} is not yet lasting: when space runs low, the browser may clear it.{' '}
+        {st.asks ? 'Your browser asks before keeping it.' : 'Installing the app, or using it often, usually makes the browser keep it.'} With Google
+        Drive sync on, nothing is lost either way.
+      </span>
+      <button className="btn sm" onClick={ask}>
+        Keep my data
+      </button>
     </div>
   );
 }

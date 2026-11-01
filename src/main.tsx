@@ -10,6 +10,7 @@ import { initSync } from './lib/sync';
 import { initLichessRatings } from './lib/lichessRating';
 import { initUpdateCheck } from './lib/version';
 import { initInstall } from './lib/install';
+import { initPersistence } from './lib/persist';
 import './styles.css';
 
 // Before anything else, so the browser's "can be installed" event is not missed.
@@ -42,6 +43,7 @@ async function tidyCheckResults() {
 }
 
 Promise.all([loadData(), loadGames()]).then(() => {
+  initPersistence();
   void tidyCheckResults();
   initSync();
   initUpdateCheck();
