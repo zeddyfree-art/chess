@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
@@ -20,6 +21,22 @@ export default defineConfig({
       name: 'version-file',
       generateBundle() {
         this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ commit, built }) });
+      },
+    },
+    // The service worker (pwa/sw.js), with a cache of its own for every build, so a new version replaces the old one.
+    {
+      name: 'service-worker',
+      generateBundle(_options, bundle) {
+        const build = `${commit}-${Date.now().toString(36)}`;
+        // Saved at once when the service worker is installed, so even the first visit can start offline next time: the
+        // app's own scripts and styles and its sounds. The big engine files (Maia's runtime, Stockfish) are saved the
+        // first time they are used.
+        const sounds = readdirSync(new URL('./public/sounds/sfx', import.meta.url)).map((f) => `sounds/sfx/${f}`);
+        const precache = [...Object.keys(bundle).filter((f) => f.startsWith('assets/') && !f.endsWith('.wasm')), ...sounds];
+        const source = readFileSync(new URL('./pwa/sw.js', import.meta.url), 'utf8')
+          .replace('__BUILD__', build)
+          .replace("'__PRECACHE__'", precache.map((f) => JSON.stringify(`./${f}`)).join(', '));
+        this.emitFile({ type: 'asset', fileName: 'sw.js', source });
       },
     },
   ],

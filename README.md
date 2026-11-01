@@ -20,6 +20,8 @@ Live: <https://zeddyfree-art.github.io/chess/> · [About](https://zeddyfree-art.
 
 *The screenshots use a demo repertoire and sample database percentages, not live Lichess numbers.*
 
+**Install it as an app**: in Chrome, Edge or on Android, *Settings → Install the app* (or the install icon in the address bar); on an iPhone or iPad, Share → *Add to Home Screen*. The installed app has its own icon and window and starts without a network (a service worker keeps the app's files; building, training and playing against Maia work offline, the Lichess database, game imports and syncing need a connection). Updates arrive by themselves.
+
 ## What's inside
 
 | Screen | What you do there |

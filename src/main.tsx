@@ -9,7 +9,11 @@ import { loadData, useApp } from './lib/store';
 import { initSync } from './lib/sync';
 import { initLichessRatings } from './lib/lichessRating';
 import { initUpdateCheck } from './lib/version';
+import { initInstall } from './lib/install';
 import './styles.css';
+
+// Before anything else, so the browser's "can be installed" event is not missed.
+initInstall();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

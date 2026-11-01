@@ -66,6 +66,11 @@ export function AboutView({ standalone = false }: { standalone?: boolean }) {
             straight on, and its comment stays in view on the next card. For a wide repertoire, train up to an early move first and go deeper step by
             step. Practice all lines plays every line to its end, the most played first, without touching your cards.
           </dd>
+          <dt>Install</dt>
+          <dd>
+            Install it as an app (Settings → Install the app, or Share → Add to Home Screen on an iPhone or iPad): its own icon
+            and window, and it starts without a network.
+          </dd>
           <dt>Play</dt>
           <dd>
             Practice games against Maia-3, a human-like opponent, at any rating from 600 to 2600, with or without a clock.

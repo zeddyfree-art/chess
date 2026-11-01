@@ -7,6 +7,7 @@ import { isMaiaDownloaded, removeMaia } from '../lib/maia';
 import { stats } from '../lib/repertoire';
 import { playSound, setSoundSet, SOUND_SET_NAMES, SOUND_SETS, soundSet, type SoundSet } from '../lib/sound';
 import { useOpeningNames } from '../lib/openings';
+import { installApp, useInstall } from '../lib/install';
 import { connectDrive, disconnectDrive, driveBackups, loadDriveBackup, reconnectDrive, syncNow, useSync } from '../lib/sync';
 import { useGames } from '../lib/gamesStore';
 import { activeRep, exportBackup, lichessRatingOf, parseBackup, PROFILE_COLORS, profileRating, useApp, type AppData, type Profile } from '../lib/store';
@@ -256,6 +257,7 @@ export function SettingsView() {
         </div>
       </div>
 
+      <InstallCard />
       <MaiaCard />
       <SoundCard />
 
@@ -445,6 +447,49 @@ export function SyncBadge() {
   };
   const [cls, label] = map[status] ?? ['', status];
   return <span className={`badge ${cls}`}>{label}</span>;
+}
+
+/** Install the app: its own icon and window, and it starts without a network. */
+function InstallCard() {
+  const state = useInstall();
+  const showToast = useApp((s) => s.showToast);
+  return (
+    <div className="card">
+      <div className="section">
+        <h2>Install the app</h2>
+      </div>
+      <div className="section stack" style={{ gap: 10 }}>
+        {state === 'installed' ? (
+          <div className="row" style={{ gap: 6 }}>
+            <Icon name="check" size={16} /> Installed: you are using the app in its own window.
+          </div>
+        ) : state === 'available' ? (
+          <div className="row wrap" style={{ gap: 10 }}>
+            <button className="btn primary" onClick={() => installApp().then((ok) => ok && showToast('Installed'))}>
+              <Icon name="download" size={16} /> Install Repertoire
+            </button>
+            <span className="small muted">Its own icon and window, without the browser around it.</span>
+          </div>
+        ) : state === 'ios' ? (
+          <div>
+            On an iPhone or iPad: tap <b>Share</b> (the square with an arrow) and then <b>Add to Home Screen</b>. In Safari on a
+            Mac: <b>File → Add to Dock</b>.
+          </div>
+        ) : (
+          <div>
+            Use your browser’s install option: in Chrome and Edge the install icon at the right of the address bar (or the
+            menu ⋮ → <b>Install Repertoire</b> / <b>Cast, save and share → Install page as app</b>); on Android ⋮ → <b>Add to
+            Home screen</b> or <b>Install app</b>. Firefox on a computer cannot install web apps.
+          </div>
+        )}
+        <div className="help">
+          The installed app is the same as this site, with the same data on this device (and your Google Drive, when
+          connected). It also starts without a network: building, training and playing against Maia work offline; the
+          Lichess database, games and syncing need a connection. Updates arrive by themselves.
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** Sound for moves and games: the free SFX set from Lichess, or none. Per device. */
