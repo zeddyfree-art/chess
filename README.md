@@ -20,7 +20,7 @@ Live: <https://zeddyfree-art.github.io/chess/> · [About](https://zeddyfree-art.
 
 *The screenshots use a demo repertoire and sample database percentages, not live Lichess numbers.*
 
-**Board colours**: Brown (Lichess), Green, Blue, Slate, Graphite or Iris (from Rookahead, GPL-3.0), in *Settings → Sound and display*, for every board in the app.
+**Board colours**: Brown (Lichess), Green, Blue, Slate, Graphite or Iris (from Rookahead, GPL-3.0), or one of Lichess' picture boards — Wood, Maple, Marble, Blue marble, Leather, Olive and ICC (AGPL-3.0, see `public/boards/README.md`) — in *Settings → Sound and display*, for every board in the app.
 
 **Install it as an app**: in Chrome, Edge or on Android, *Settings → Install the app* (or the install icon in the address bar); on an iPhone or iPad, Share → *Add to Home Screen*. The installed app has its own icon and window and starts without a network (a service worker keeps the app's files; building, training and playing against Maia work offline, the Lichess database, game imports and syncing need a connection). Updates arrive by themselves. The app also asks the browser to keep its storage for good (*persistent storage*), so it is not cleared when the device runs low on space; Settings shows whether it is (Chrome, Edge and Safari decide by themselves, usually yes for an installed app; Firefox asks you, through the *Keep my data* button).
 
@@ -359,7 +359,8 @@ Built on [chessground](https://github.com/lichess-org/chessground) and [chessops
 (CSSLab) — all GPL-3.0 — plus [ONNX Runtime Web](https://onnxruntime.ai) and [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) (MIT).
 Because of the GPL components, the app as a whole is distributed under GPL-3.0.
 
-The "Wood" sounds (`src/lib/woodSound.ts`, made with the Web Audio API) and the board colours (`src/lib/boardTheme.ts`) come from
+The picture boards in `public/boards` come from [lila](https://github.com/lichess-org/lila) (the lila authors and pirouetti, AGPL-3.0-or-later; see `public/boards/README.md`).
+The "Wood" sounds (`src/lib/woodSound.ts`, made with the Web Audio API) and the plain board colours (`src/lib/boardTheme.ts`) come from
 [Rookahead](https://github.com/rookahead/rookahead) (GPL-3.0-or-later). The sounds in `public/sounds` (the SFX set) were made by
 [Enigmahack](https://github.com/Enigmahack) for Lichess and are used unchanged under the AGPL-3.0-or-later, as in
 [lila](https://github.com/lichess-org/lila/blob/master/COPYING.md); see `public/sounds/README.md`. Lichess' default

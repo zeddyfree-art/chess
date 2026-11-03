@@ -9,7 +9,7 @@ import { playSound, setSoundSet, SOUND_SET_NAMES, SOUND_SETS, soundSet, type Sou
 import { useOpeningNames } from '../lib/openings';
 import { installApp, useInstall } from '../lib/install';
 import { keepStorage, useStorageState } from '../lib/persist';
-import { BOARD_THEMES, boardImage, setBoardTheme, useBoardTheme, type BoardThemeName } from '../lib/boardTheme';
+import { BOARD_THEMES, boardBackground, setBoardTheme, useBoardTheme, type BoardThemeName } from '../lib/boardTheme';
 import { connectDrive, disconnectDrive, driveBackups, loadDriveBackup, reconnectDrive, syncNow, useSync } from '../lib/sync';
 import { useGames } from '../lib/gamesStore';
 import { activeRep, exportBackup, lichessRatingOf, parseBackup, PROFILE_COLORS, profileRating, useApp, type AppData, type Profile } from '../lib/store';
@@ -544,7 +544,7 @@ function BoardThemePicker() {
               onClick={() => setBoardTheme(name)}
               title={t.label}
             >
-              <span className="board-swatch-squares" style={{ backgroundImage: boardImage(t.light, t.dark) }} />
+              <span className="board-swatch-squares" style={{ backgroundImage: boardBackground(t) }} />
               <span className="small">{t.label}</span>
             </button>
           );
