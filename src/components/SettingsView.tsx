@@ -9,6 +9,7 @@ import { playSound, setSoundSet, SOUND_SET_NAMES, SOUND_SETS, soundSet, type Sou
 import { useOpeningNames } from '../lib/openings';
 import { installApp, useInstall } from '../lib/install';
 import { keepStorage, useStorageState } from '../lib/persist';
+import { BOARD_THEMES, boardImage, setBoardTheme, useBoardTheme, type BoardThemeName } from '../lib/boardTheme';
 import { connectDrive, disconnectDrive, driveBackups, loadDriveBackup, reconnectDrive, syncNow, useSync } from '../lib/sync';
 import { useGames } from '../lib/gamesStore';
 import { activeRep, exportBackup, lichessRatingOf, parseBackup, PROFILE_COLORS, profileRating, useApp, type AppData, type Profile } from '../lib/store';
@@ -525,6 +526,34 @@ function StorageLine() {
   );
 }
 
+/** The board's colours, for every board in the app; kept on this device. */
+function BoardThemePicker() {
+  const current = useBoardTheme();
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <span className="small muted">Board</span>
+      <div className="board-swatches" role="radiogroup" aria-label="Board colours">
+        {(Object.keys(BOARD_THEMES) as BoardThemeName[]).map((name) => {
+          const t = BOARD_THEMES[name];
+          return (
+            <button
+              key={name}
+              role="radio"
+              aria-checked={current === name}
+              className={`board-swatch ${current === name ? 'on' : ''}`}
+              onClick={() => setBoardTheme(name)}
+              title={t.label}
+            >
+              <span className="board-swatch-squares" style={{ backgroundImage: boardImage(t.light, t.dark) }} />
+              <span className="small">{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** Sound for moves and games: the free SFX set from Lichess, or none. Per device. */
 function SoundCard() {
   const [set, setSet] = useState<SoundSet>(soundSet);
@@ -558,9 +587,10 @@ function SoundCard() {
         </div>
         <div className="help">
           Moves, captures and checks while you play and train, the start and end of a practice game, and a warning when
-          your clock runs low. The sounds (the SFX set) were made by Enigmahack for Lichess (AGPL-3.0); Lichess' own default sounds are
+          your clock runs low. SFX was made by Enigmahack for Lichess (AGPL-3.0); Wood is made in your browser, with no sound files (from Rookahead, GPL-3.0); Lichess' own default sounds are
           not free to reuse, so they are not here. This choice is kept on this device.
         </div>
+        <BoardThemePicker />
         <label className="row" style={{ gap: 6, cursor: 'pointer' }}>
           <input type="checkbox" checked={names} onChange={(e) => setNames(e.target.checked)} />
           Show opening names (Tree, Build, training, games)

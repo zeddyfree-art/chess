@@ -44,7 +44,9 @@ export function LineReviewSession({
 
   const targets = useRef(new Set(items.map((i) => i.id)));
   const taught = useRef(new Set<string>());
-  const pass = useRef<'first' | 'test'>('first');
+  // 'retry': at the end, the lines of the moves you missed, once more (ungraded).
+  const pass = useRef<'first' | 'test' | 'retry'>('first');
+  const missedIds = useRef(new Set<string>());
   const lineTargets = useRef(new Set<string>());
   const unsaved = useRef(false);
 
@@ -61,6 +63,8 @@ export function LineReviewSession({
   // What the author wrote around a move being taught.
   const [teachWords, setTeachWords] = useState<({ label: string; text: string } | undefined)[]>([]);
   const [missed, setMissed] = useState(false);
+  // After a mistake you play the move with the arrow, then once more from memory before the line goes on.
+  const [redo, setRedo] = useState(false);
   const [hinted, setHinted] = useState(false);
   const [score, setScore] = useState({ lines: 0, good: 0, bad: 0 });
   const [saved, setSaved] = useState<SaveResult | 'saving' | null>(null);
@@ -86,6 +90,12 @@ export function LineReviewSession({
       targets.current = new Set(taught.current);
       next = planLine(rep, { ...opts, targets: targets.current });
     }
+    if (!next && pass.current !== 'retry' && missedIds.current.size) {
+      // The moves you missed, once more at the end.
+      pass.current = 'retry';
+      targets.current = new Set(missedIds.current);
+      next = planLine(rep, { ...opts, targets: targets.current });
+    }
     if (!next) {
       setPhase('done');
       setPlan(null);
@@ -98,7 +108,9 @@ export function LineReviewSession({
     setLastMove(startMove ? uciToArrow(startMove.uci) : null);
     setShapes([]);
     setSaid(null);
-    setMessage(pass.current === 'test' ? 'Your new moves once more, without help.' : null);
+    setMessage(
+      pass.current === 'test' ? 'Your new moves once more, without help.' : pass.current === 'retry' ? 'The moves you missed, once more.' : null,
+    );
     setLineNo((n) => n + 1);
   };
 
@@ -114,6 +126,7 @@ export function LineReviewSession({
   useEffect(() => {
     if (!plan) return;
     setMissed(false);
+    setRedo(false);
     setHinted(false);
     if (i >= plan.length) {
       setPhase('between');
@@ -199,10 +212,26 @@ export function LineReviewSession({
       }, 1100);
       return;
     }
+    if (m.uci === current.uci && missed && !redo) {
+      // Played with the arrow: now once more, from memory.
+      triggerFlash('flash-good');
+      setRedo(true);
+      setPhase('auto');
+      setShapes([]);
+      setPos(m.to);
+      setLastMove(uciToArrow(m.uci));
+      setMessage(<>Now once more, without the arrow.</>);
+      later(() => {
+        setPos(current.from);
+        setLastMove(i > 0 && plan ? uciToArrow(plan[i - 1].uci) : startMove ? uciToArrow(startMove.uci) : null);
+        setPhase('await');
+      }, 900);
+      return;
+    }
     if (m.uci === current.uci) {
       triggerFlash('flash-good');
       if (teaching) taught.current.add(current.id);
-      else if (target && !missed) {
+      else if (target && !missed && pass.current !== 'retry') {
         grade(current.id, hinted ? Rating.Hard : Rating.Good);
         setScore((s) => ({ ...s, good: s.good + 1 }));
       }
@@ -217,7 +246,9 @@ export function LineReviewSession({
       return;
     }
     triggerFlash('flash-bad');
-    if (!missed && !teaching && (target || (card && card.state !== State.New))) {
+    if (pass.current !== 'retry') missedIds.current.add(current.id);
+    setRedo(false);
+    if (!missed && !teaching && pass.current !== 'retry' && (target || (card && card.state !== State.New))) {
       // Due: graded as forgotten. Not due: a mistake still counts, so it comes back soon.
       grade(current.id, Rating.Again);
       setScore((s) => ({ ...s, bad: s.bad + 1 }));

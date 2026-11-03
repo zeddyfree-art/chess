@@ -412,10 +412,13 @@ export function ReviewSession({ rep, initial, onExit, onDone }: { rep: Repertoir
   const [phase, setPhase] = useState<'intro' | 'await' | 'also' | 'good' | 'bad' | 'done'>('intro');
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [mistake, setMistake] = useState(false);
+  // After a mistake you play the move with the arrow, then once more from memory: the card goes on only when you
+  // find it yourself (and it comes back once more at the end of the session).
+  const [redo, setRedo] = useState(false);
   const [hinted, setHinted] = useState(false);
   const [message, setMessage] = useState<React.ReactNode>(null);
   const [score, setScore] = useState({ good: 0, bad: 0 });
-  // After a mistake the session waits for Continue, so you can look at the position.
+  // Waiting for Continue (no longer used after a mistake: the card is played again from memory instead).
   const [waiting, setWaiting] = useState(false);
   // What the author wrote at the card you just found: it goes along to the next card until you answer that one, so
   // there is time to read it without a stop.
@@ -483,6 +486,7 @@ export function ReviewSession({ rep, initial, onExit, onDone }: { rep: Repertoir
       return;
     }
     setMistake(false);
+    setRedo(false);
     setHinted(false);
     setWaiting(false);
     setPeek(null);
@@ -567,6 +571,16 @@ export function ReviewSession({ rep, initial, onExit, onDone }: { rep: Repertoir
       later(() => backToCard(keep), 1100);
       return;
     }
+    if (m.uci === item.uci && mistake && !redo) {
+      // Played with the arrow: now once more, from memory.
+      triggerFlash('flash-good');
+      setShapes([]);
+      setPhase('good');
+      setRedo(true);
+      setMessage(<>Now once more, without the arrow.</>);
+      later(() => backToCard([]), 900);
+      return;
+    }
     if (m.uci === item.uci) {
       triggerFlash('flash-good');
       setShapes([]);
@@ -577,7 +591,9 @@ export function ReviewSession({ rep, initial, onExit, onDone }: { rep: Repertoir
         info = 'Remember it! You will get it again in a moment.';
       } else if (item.kind === 'retry') {
         info = 'Well done.';
-      } else if (!mistake) {
+      } else if (mistake) {
+        info = 'Good. It comes back once more at the end of the session.';
+      } else {
         const due = grade(hinted ? Rating.Hard : Rating.Good);
         setScore((s) => ({ ...s, good: s.good + 1 }));
         info = `Correct! Next review in ${formatInterval(due - Date.now())}.`;
@@ -585,14 +601,11 @@ export function ReviewSession({ rep, initial, onExit, onDone }: { rep: Repertoir
       const w = authorWords(rep, item, path);
       setMessage(info);
       setWords([w.note, w.mine]);
-      // Found it: on to the next card, taking the author's words along (a new move showed them already). After a
-      // mistake the session waits.
-      if (mistake) setWaiting(true);
-      else {
-        const words = item.kind === 'learn' ? [] : [w.note, w.mine].filter((x): x is Words => !!x);
-        if (words.length) setCarried(words);
-        later(next, 700);
-      }
+      // Found it: on to the next card, taking the author's words along (a new move showed them already); after a
+      // mistake a little later, to read what it says.
+      const words = item.kind === 'learn' ? [] : [w.note, w.mine].filter((x): x is Words => !!x);
+      if (words.length) setCarried(words);
+      later(next, mistake ? 1300 : 700);
     } else {
       triggerFlash('flash-bad');
       setPhase('bad');
@@ -604,6 +617,7 @@ export function ReviewSession({ rep, initial, onExit, onDone }: { rep: Repertoir
         if (isLeech(card)) setLeech(card!.lapses);
       }
       setMistake(true);
+      setRedo(false);
       setMessage(
         <>
           Not your repertoire move. Play <b>{item.san}</b>.
@@ -733,7 +747,8 @@ export function ReviewSession({ rep, initial, onExit, onDone }: { rep: Repertoir
         </div>
         <div className="help">
           A hint (which piece) counts as “hard”, a wrong move as “again”. Another of your moves does not count: each card asks
-          for its own. Cards you got wrong come back at the end of the session. A comment on a move you found stays in view
+          for its own. After a wrong move you play the right one with the arrow, then once more from memory, and only then go on;
+          the card comes back at the end of the session too. A comment on a move you found stays in view
           on the next card.
           <span className="desktop-only"> Keys: Space continue, H hint, ← → look back through the line.</span>
         </div>
