@@ -7,12 +7,15 @@ import react from '@vitejs/plugin-react';
 // Shown on the About page, so a bug report can say which version it is about.
 const commit = (process.env.GITHUB_SHA ?? '').slice(0, 7) || 'local';
 const built = new Date().toISOString().slice(0, 10);
+// The version people see ("What's new", About): package.json's version, raised by hand with each notable release.
+const version = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 export default defineConfig({
   base: './',
   define: {
     __APP_COMMIT__: JSON.stringify(commit),
     __BUILD_DATE__: JSON.stringify(built),
+    __APP_VERSION__: JSON.stringify(version),
   },
   plugins: [
     react(),

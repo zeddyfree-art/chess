@@ -20,6 +20,8 @@ Live: <https://zeddyfree-art.github.io/chess/> · [About](https://zeddyfree-art.
 
 *The screenshots use a demo repertoire and sample database percentages, not live Lichess numbers.*
 
+**What's new and feedback**: after an update the app shows once what changed (all versions are on the About page; the list is `src/lib/changelog.ts`, with the version in `package.json`), and *Send feedback* at the bottom of every screen opens an e-mail with the version and your device filled in.
+
 **Board colours**: Brown (Lichess), Green, Blue, Slate, Graphite or Iris (from Rookahead, GPL-3.0), or one of Lichess' picture boards — Wood, Maple, Marble, Blue marble, Leather, Olive and ICC (AGPL-3.0, see `public/boards/README.md`) — in *Settings → Sound and display*, for every board in the app.
 
 **Install it as an app**: in Chrome, Edge or on Android, *Settings → Install the app* (or the install icon in the address bar); on an iPhone or iPad, Share → *Add to Home Screen*. The installed app has its own icon and window and starts without a network (a service worker keeps the app's files; building, training and playing against Maia work offline, the Lichess database, game imports and syncing need a connection). Updates arrive by themselves. The app also asks the browser to keep its storage for good (*persistent storage*), so it is not cleared when the device runs low on space; Settings shows whether it is (Chrome, Edge and Safari decide by themselves, usually yes for an installed app; Firefox asks you, through the *Keep my data* button).

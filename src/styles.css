@@ -3320,3 +3320,11 @@ html {
   background-size: 100% 100%;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
+
+/* What's new: the changes of a version, one per line. */
+.whats-new {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}

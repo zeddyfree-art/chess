@@ -9,6 +9,8 @@ import { HomeView, NewRepertoireDialog } from './components/HomeView';
 import { Icon, type IconName } from './components/Icon';
 import { PlayView } from './components/PlayView';
 import { SaveIndicator, SyncBanner, UpdateBanner } from './components/SaveIndicator';
+import { WhatsNew } from './components/WhatsNew';
+import { markVersionSeen } from './lib/changelog';
 import { SettingsView } from './components/SettingsView';
 import { TrainView } from './components/TrainView';
 import { TreeView } from './components/TreeView';
@@ -105,6 +107,7 @@ export function App() {
         </ErrorBoundary>
       </main>
       <Footer />
+      <WhatsNew />
       {toast && (
         <div className="toast" role="status">
           <span>{toast.message}</span>
@@ -256,6 +259,8 @@ const LEVELS = [
 
 function Onboarding() {
   const { addProfile, setActiveProfile, showToast } = useApp.getState();
+  // Someone new has nothing older to compare with: no "What's new" for them after they start.
+  useEffect(() => markVersionSeen(), []);
   const [people, setPeople] = useState([{ name: '', level: 1 }]);
   const [loading, setLoading] = useState(false);
   const driveReady = !!googleClientId();

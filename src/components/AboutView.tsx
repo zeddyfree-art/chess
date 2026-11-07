@@ -1,3 +1,4 @@
+import { APP_VERSION, CHANGELOG, feedbackHref } from '../lib/changelog';
 import { useApp } from '../lib/store';
 import { Icon } from './Icon';
 
@@ -7,7 +8,7 @@ const REPO = 'https://github.com/zeddyfree-art/chess';
  *  any player exists (from the first screen) and as a link: …/chess/#about. */
 export function AboutView({ standalone = false }: { standalone?: boolean }) {
   const setView = useApp((s) => s.setView);
-  const version = __APP_COMMIT__ === 'local' ? `${__BUILD_DATE__} (local build)` : `${__BUILD_DATE__} · ${__APP_COMMIT__}`;
+  const version = `${APP_VERSION} · ${__APP_COMMIT__ === 'local' ? `${__BUILD_DATE__} (local build)` : `${__BUILD_DATE__} · ${__APP_COMMIT__}`}`;
 
   return (
     <article className="about">
@@ -177,11 +178,30 @@ export function AboutView({ standalone = false }: { standalone?: boolean }) {
       </section>
 
       <section className="section">
+        <h2>What’s new</h2>
+        {CHANGELOG.map((c) => (
+          <div key={c.version} className="stack" style={{ gap: 4 }}>
+            <b>
+              Version {c.version} <span className="faint small">· {c.date}</span>
+            </b>
+            <ul className="whats-new">
+              {c.items.map((it) => (
+                <li key={it}>{it}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </section>
+
+      <section className="section">
         <h2>Feedback</h2>
-        <p>Found a bug or have an idea? Open an issue on GitHub and mention the version below.</p>
+        <p>Found a bug or have an idea? Send an e-mail (the version and your device are filled in), or open an issue on GitHub.</p>
         <div className="row wrap about-links">
+          <a className="btn sm primary" href={feedbackHref()}>
+            <Icon name="flag" size={14} /> Send feedback
+          </a>
           <a className="btn sm" href={`${REPO}/issues`} target="_blank" rel="noreferrer">
-            <Icon name="flag" size={14} /> Report a problem
+            Report on GitHub
           </a>
           <a className="btn sm ghost" href={REPO} target="_blank" rel="noreferrer">
             <Icon name="external" size={14} /> Source code
