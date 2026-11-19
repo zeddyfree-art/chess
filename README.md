@@ -1,5 +1,7 @@
 # Repertoire — build, check and train your chess openings
 
+> **Repertoire 1 is now a legacy version.** It remains available and usable at [the original app](https://zeddyfree-art.github.io/chess/), but it will receive no further feature updates. The actively maintained successor is **[Repertoire 2](https://zeddyfree-art.github.io/repertoire2/)**. The apps have separate data and Google Drive storage; moving to Repertoire 2 is optional and is not automatic.
+
 A web app in the spirit of Chessbook, but with **no move limit**, **several players** per device, **sync
 across devices** through your own Google Drive, and a **human-like practice opponent**. Build opening
 repertoires, see all branches at a glance, prune what you don't need, check your moves with an engine and
