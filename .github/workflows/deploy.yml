@@ -36,7 +36,7 @@ jobs:
           VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
       # Smoke tests in a real browser, at desktop and phone width, against the build above: nothing is published when
       # the main routes break. On failure the report (screenshots, traces) is kept as an artifact of the run.
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install chromium --only-shell
       - run: npm run e2e
       - if: failure()
         uses: actions/upload-artifact@v4
