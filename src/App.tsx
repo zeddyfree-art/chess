@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AboutView } from './components/AboutView';
 import { AuditView } from './components/AuditView';
 import { Footer } from './components/Footer';
+import { SuccessorNotice } from './components/SuccessorNotice';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BuildView } from './components/BuildView';
 import { AnalysisPill, GamesView } from './components/GamesView';
@@ -71,9 +72,10 @@ export function App() {
 
   if (!loaded) return null;
   if (!hasProfiles) {
-    if (view !== 'about') return <Onboarding />;
+    if (view !== 'about') return <><SuccessorNotice /><Onboarding /></>;
     return (
       <div className="app">
+        <SuccessorNotice />
         <main>
           <AboutView standalone />
         </main>
@@ -99,6 +101,7 @@ export function App() {
   return (
     <div className="app">
       <TopBar />
+      <SuccessorNotice />
       <UpdateBanner />
       <SyncBanner />
       <main>
